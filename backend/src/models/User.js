@@ -1,0 +1,69 @@
+const mongoose = require('mongoose');
+
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const userSchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      required: true,
+      trim: true,
+      minlength: 2,
+      maxlength: 80,
+    },
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+      match: emailPattern,
+    },
+    instagramId: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 100,
+    },
+    passwordHash: {
+      type: String,
+      required: true,
+      select: false,
+    },
+    profileImageUrl: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    shareCode: {
+      type: String,
+      required: true,
+      unique: true,
+      index: true,
+      trim: true,
+    },
+    refreshTokens: {
+      type: [String],
+      default: [],
+      select: false,
+    },
+  },
+  {
+    timestamps: true,
+    toJSON: {
+      versionKey: false,
+      transform: (_, ret) => {
+        ret.id = ret._id.toString();
+        delete ret._id;
+        delete ret.passwordHash;
+        delete ret.refreshTokens;
+        return ret;
+      },
+    },
+  }
+);
+
+userSchema.index({ email: 1 }, { unique: true });
+userSchema.index({ shareCode: 1 }, { unique: true });
+
+module.exports = mongoose.model('User', userSchema);
