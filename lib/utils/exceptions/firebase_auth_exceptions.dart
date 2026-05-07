@@ -79,8 +79,6 @@ class TFirebaseAuthException implements Exception {
         return 'The provided Cordova configuration is invalid.';
       case 'app-deleted':
         return 'This instance of FirebaseApp has been deleted.';
-      case 'user-disabled':
-        return 'The user account has been disabled.';
       case 'user-token-mismatch':
         return 'The provided user\'s token has a mismatch with the authenticated user\'s user ID.';
       case 'web-storage-unsupported':
