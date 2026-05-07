@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../features/onboarding/presentation/screens/dob_screen.dart';
 import '../features/onboarding/presentation/screens/name_screen.dart';
 import '../features/home/presentation/screens/home_screen.dart';
+import '../features/home/presentation/screens/share_playing_screen.dart';
 import '../features/home/presentation/screens/share_preview_screen.dart';
 import '../features/inbox/presentation/screens/inbox_screen.dart';
 import '../features/matches/presentation/screens/matches_screen.dart';
@@ -39,6 +40,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/inbox', builder: (_, _) => const InboxScreen()),
       GoRoute(path: '/play', builder: (_, _) => const PlayScreen()),
       GoRoute(path: '/share', builder: (_, _) => const SharePreviewScreen()),
+      GoRoute(
+        path: '/share/playing',
+        builder: (_, _) => const SharePlayingScreen(),
+      ),
     ],
     redirect: (_, state) {
       final isLoading =

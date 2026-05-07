@@ -6,6 +6,10 @@ import 'package:hamme_app/utils/constants/colors.dart';
 import 'package:hamme_app/utils/constants/fonts.dart';
 
 import '../../../../../core/widgets/gradient_button.dart';
+import '../widgets/avatar_bubble.dart';
+import '../widgets/footer_link.dart';
+import '../widgets/header_curve_clipper.dart';
+import '../widgets/pro_feature.dart';
 
 class ProScreen extends ConsumerWidget {
   const ProScreen({super.key});
@@ -29,7 +33,7 @@ class ProScreen extends ConsumerWidget {
               child: Stack(
                 children: [
                   ClipPath(
-                    clipper: _HeaderCurveClipper(),
+                    clipper: HeaderCurveClipper(),
                     child: Container(
                       height: 160,
                       decoration: const BoxDecoration(
@@ -147,21 +151,21 @@ class ProScreen extends ConsumerWidget {
                       ),
                       child: const Column(
                         children: [
-                          _ProFeature(
+                          ProFeature(
                             icon: '∞',
                             title: 'Unlimited Play',
                             subtitle:
                                 'No waiting, Play every profile,\nanytime.',
                           ),
                           SizedBox(height: 28),
-                          _ProFeature(
+                          ProFeature(
                             icon: '↩',
                             title: 'Unlimited Rewinds',
                             subtitle:
                                 'Picked wrong? Go back and change\nyour pick.',
                           ),
                           SizedBox(height: 28),
-                          _ProFeature(
+                          ProFeature(
                             icon: '⚡',
                             title: 'Priority Profile',
                             subtitle:
@@ -174,11 +178,11 @@ class ProScreen extends ConsumerWidget {
                     const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        _AvatarBubble(label: 'N', color: Color(0xFFFA3F8F)),
-                        _AvatarBubble(label: 'K', color: Color(0xFF1BD66B)),
-                        _AvatarBubble(label: 'A', color: Color(0xFF3FA7FF)),
-                        _AvatarBubble(label: 'S', color: Color(0xFFFFCB36)),
-                        _AvatarBubble(label: 'R', color: Color(0xFFFF5252)),
+                        AvatarBubble(label: 'N', color: Color(0xFFFA3F8F)),
+                        AvatarBubble(label: 'K', color: Color(0xFF1BD66B)),
+                        AvatarBubble(label: 'A', color: Color(0xFF3FA7FF)),
+                        AvatarBubble(label: 'S', color: Color(0xFFFFCB36)),
+                        AvatarBubble(label: 'R', color: Color(0xFFFF5252)),
                         SizedBox(width: 10),
                         Text(
                           '1000+ went PRO today',
@@ -210,9 +214,9 @@ class ProScreen extends ConsumerWidget {
                     const Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _FooterLink(label: 'Privacy'),
-                        _FooterLink(label: 'Restore'),
-                        _FooterLink(label: 'Terms'),
+                        FooterLink(label: 'Privacy'),
+                        FooterLink(label: 'Restore'),
+                        FooterLink(label: 'Terms'),
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -225,132 +229,4 @@ class ProScreen extends ConsumerWidget {
       ),
     );
   }
-}
-
-class _ProFeature extends StatelessWidget {
-  const _ProFeature({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-  });
-
-  final String icon;
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          width: 58,
-          height: 58,
-          decoration: const BoxDecoration(
-            color: TColors.white,
-            shape: BoxShape.circle,
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            icon,
-            style: const TextStyle(
-              fontSize: 32,
-              color: TColors.hammePrimaryDark,
-            ),
-          ),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontFamily: TFonts.nunito,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w900,
-                  color: TColors.black,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                subtitle,
-                style: const TextStyle(
-                  fontFamily: TFonts.nunito,
-                  fontSize: 14,
-                  height: 1.25,
-                  fontWeight: FontWeight.w600,
-                  color: TColors.textSecondary,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _AvatarBubble extends StatelessWidget {
-  const _AvatarBubble({required this.label, required this.color});
-
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 22,
-      height: 22,
-      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-      alignment: Alignment.center,
-      child: Text(
-        label,
-        style: const TextStyle(
-          fontFamily: TFonts.nunito,
-          fontSize: 12,
-          fontWeight: FontWeight.w900,
-          color: TColors.white,
-        ),
-      ),
-    );
-  }
-}
-
-class _FooterLink extends StatelessWidget {
-  const _FooterLink({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      label,
-      style: const TextStyle(
-        fontFamily: TFonts.nunito,
-        fontSize: 13,
-        fontWeight: FontWeight.w500,
-        color: TColors.darkGrey,
-      ),
-    );
-  }
-}
-
-class _HeaderCurveClipper extends CustomClipper<Path> {
-  @override
-  Path getClip(Size size) {
-    return Path()
-      ..lineTo(0, size.height - 12)
-      ..quadraticBezierTo(
-        size.width / 2,
-        size.height,
-        size.width,
-        size.height - 12,
-      )
-      ..lineTo(size.width, 0)
-      ..close();
-  }
-
-  @override
-  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
 }

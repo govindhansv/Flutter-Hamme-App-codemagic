@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:hamme_app/features/matches/presentation/widgets/skeleton_match_card.dart';
 import 'package:hamme_app/utils/constants/colors.dart';
 import 'package:hamme_app/utils/constants/fonts.dart';
 import 'package:hamme_app/utils/constants/image_strings.dart';
@@ -84,15 +85,15 @@ class MatchesScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 34),
-                    const _SkeletonMatchCard(),
+                    const SkeletonMatchCard(),
                     const SizedBox(height: 24),
-                    const _SkeletonMatchCard(),
+                    const SkeletonMatchCard(),
                     const SizedBox(height: 24),
-                    const _SkeletonMatchCard(),
+                    const SkeletonMatchCard(),
                     const SizedBox(height: 24),
-                    const _SkeletonMatchCard(),
+                    const SkeletonMatchCard(),
                     const SizedBox(height: 24),
-                    const _SkeletonMatchCard(),
+                    const SkeletonMatchCard(),
                     const SizedBox(height: 28),
                     const Text(
                       '🧨 Matches are vanished after 24hrs',
@@ -111,21 +112,6 @@ class MatchesScreen extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _SkeletonMatchCard extends StatelessWidget {
-  const _SkeletonMatchCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 56,
-      decoration: BoxDecoration(
-        color: TColors.grey.withValues(alpha: 0.65),
-        borderRadius: BorderRadius.circular(14),
       ),
     );
   }

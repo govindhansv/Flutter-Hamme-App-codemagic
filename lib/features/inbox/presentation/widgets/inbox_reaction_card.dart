@@ -1,26 +1,12 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:hamme_app/features/inbox/domain/models/inbox_variation.dart';
 import 'package:hamme_app/utils/constants/colors.dart';
 import 'package:hamme_app/utils/constants/fonts.dart';
 import 'package:hamme_app/utils/constants/text_strings.dart';
 
-class InboxVariation {
-  const InboxVariation({
-    required this.gradientColors,
-    required this.borderColor,
-    required this.emoji,
-  });
-
-  final List<Color> gradientColors;
-  final Color borderColor;
-  final String emoji;
-}
-
 class InboxReactionCard extends StatelessWidget {
-  const InboxReactionCard({
-    required this.variation,
-    super.key,
-  });
+  const InboxReactionCard({required this.variation, super.key});
 
   final InboxVariation variation;
 

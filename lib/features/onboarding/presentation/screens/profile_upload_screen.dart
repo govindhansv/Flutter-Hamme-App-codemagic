@@ -12,6 +12,7 @@ import 'package:hamme_app/utils/constants/text_strings.dart';
 
 import '../../../../../core/widgets/gradient_button.dart';
 import '../widgets/dob_top_bar.dart';
+import '../widgets/triangle_painter.dart';
 
 class ProfileUploadScreen extends ConsumerStatefulWidget {
   const ProfileUploadScreen({super.key});
@@ -195,7 +196,7 @@ class _ProfileUploadScreenState extends ConsumerState<ProfileUploadScreen> {
                     left: 140,
                     child: CustomPaint(
                       size: const Size(20, 15),
-                      painter: _TrianglePainter(color: TColors.hammePrimary),
+                      painter: TrianglePainter(color: TColors.hammePrimary),
                     ),
                   ),
 
@@ -268,30 +269,4 @@ class _ProfileUploadScreenState extends ConsumerState<ProfileUploadScreen> {
       ),
     );
   }
-}
-
-// Custom Painter for the tooltip triangle tail
-class _TrianglePainter extends CustomPainter {
-  final Color color;
-
-  _TrianglePainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint =
-        Paint()
-          ..color = color
-          ..style = PaintingStyle.fill;
-
-    final path = Path();
-    path.moveTo(0, 0);
-    path.lineTo(size.width, 0);
-    path.lineTo(size.width / 2, size.height);
-    path.close();
-
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

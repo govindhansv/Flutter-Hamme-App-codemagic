@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:hamme_app/features/inbox/domain/models/inbox_variation.dart';
 import 'package:hamme_app/utils/constants/colors.dart';
 import '../../../shared/presentation/widgets/hamme_bottom_nav_bar.dart';
 import '../../../shared/presentation/widgets/hamme_top_bar.dart';
@@ -28,7 +29,10 @@ class _InboxScreenState extends State<InboxScreen> {
       emoji: '🤝',
     ),
     InboxVariation(
-      gradientColors: [TColors.hammeInboxPurpleStart, TColors.hammeInboxPurpleEnd],
+      gradientColors: [
+        TColors.hammeInboxPurpleStart,
+        TColors.hammeInboxPurpleEnd,
+      ],
       borderColor: TColors.hammeInboxPurpleBorder,
       emoji: '😈',
     ),
