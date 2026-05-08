@@ -1,4 +1,5 @@
-import 'dart:io';
+import 'dart:io' show File;
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -40,9 +41,15 @@ class _ProfileUploadScreenState extends ConsumerState<ProfileUploadScreen> {
     super.initState();
     final imagePath = ref.read(onboardingDraftProvider).profileImagePath;
     if (imagePath != null && imagePath.isNotEmpty) {
-      final file = File(imagePath);
-      if (file.existsSync()) {
-        _selectedImage = file;
+      if (kIsWeb) {
+        setState(() {
+          // On web we just store the path string
+        });
+      } else {
+        final file = File(imagePath);
+        if (file.existsSync()) {
+          _selectedImage = file;
+        }
       }
     }
   }
@@ -71,7 +78,9 @@ class _ProfileUploadScreenState extends ConsumerState<ProfileUploadScreen> {
 
     if (!mounted) return;
     setState(() {
-      _selectedImage = File(pickedFile.path);
+      if (!kIsWeb) {
+        _selectedImage = File(pickedFile.path);
+      }
     });
     ref
         .read(onboardingDraftProvider.notifier)
@@ -93,7 +102,7 @@ class _ProfileUploadScreenState extends ConsumerState<ProfileUploadScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            DobTopBar(onBack: () => context.pop(), progress: 0.75),
+            DobTopBar(onBack: () => context.go('/onboarding/name'), progress: 0.75),
             const SizedBox(height: 30),
             const Text(
               TTexts.onboardingProfileTitle,
@@ -215,17 +224,23 @@ class _ProfileUploadScreenState extends ConsumerState<ProfileUploadScreen> {
                               shape: BoxShape.circle,
                             ),
                             child: ClipOval(
-                              child:
-                                  _selectedImage == null
+                              child: ref.watch(onboardingDraftProvider).profileImagePath == null
                                       ? const Icon(
                                         CupertinoIcons.person_solid,
                                         size: 80,
                                         color: Colors.black,
                                       )
-                                      : Image.file(
-                                        _selectedImage!,
-                                        fit: BoxFit.cover,
-                                      ),
+                                      : kIsWeb
+                                          ? Image.network(
+                                            ref
+                                                .watch(onboardingDraftProvider)
+                                                .profileImagePath!,
+                                            fit: BoxFit.cover,
+                                          )
+                                          : Image.file(
+                                            _selectedImage!,
+                                            fit: BoxFit.cover,
+                                          ),
                             ),
                           ),
                           Positioned(

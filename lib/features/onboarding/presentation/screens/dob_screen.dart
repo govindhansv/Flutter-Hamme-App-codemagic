@@ -19,7 +19,6 @@ class DobScreen extends ConsumerStatefulWidget {
 
 class _DobScreenState extends ConsumerState<DobScreen> {
   int _selectedAge = 19;
-  bool _hasInteracted = false;
 
   static const int _minAge = 13;
   static const int _maxAge = 100;
@@ -38,7 +37,6 @@ class _DobScreenState extends ConsumerState<DobScreen> {
         age--;
       }
       _selectedAge = age.clamp(_minAge, _maxAge);
-      _hasInteracted = true;
     }
 
     _ageController ??= FixedExtentScrollController(
@@ -60,14 +58,32 @@ class _DobScreenState extends ConsumerState<DobScreen> {
   void _onAgeChanged(int index) {
     setState(() {
       _selectedAge = _minAge + index;
-      _hasInteracted = true;
     });
+  }
+
+  void _incrementAge() {
+    if (_selectedAge < _maxAge) {
+      _ageController?.animateToItem(
+        _selectedAge + 1 - _minAge,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
+  void _decrementAge() {
+    if (_selectedAge > _minAge) {
+      _ageController?.animateToItem(
+        _selectedAge - 1 - _minAge,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeInOut,
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final displayAge =
-        _hasInteracted ? _selectedAge.toString().padLeft(2, '0') : '00';
+    final displayAge = _selectedAge.toString().padLeft(2, '0');
 
     return Scaffold(
       backgroundColor: TColors.white,
@@ -87,7 +103,7 @@ class _DobScreenState extends ConsumerState<DobScreen> {
                   style: TextStyle(
                     fontFamily: TFonts.nunito,
                     fontWeight: FontWeight.w900,
-                    fontSize: 26,
+                    fontSize: 24,
                     color: TColors.black,
                   ),
                 ),
@@ -145,25 +161,6 @@ class _DobScreenState extends ConsumerState<DobScreen> {
                         ),
                       ),
                     ),
-                    Positioned(
-                      left: 16,
-                      child: const RotatedBox(
-                        quarterTurns: 2,
-                        child: Icon(
-                          CupertinoIcons.play_arrow_solid,
-                          color: TColors.hammeAccentBlue,
-                          size: 14,
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      right: 16,
-                      child: const Icon(
-                        CupertinoIcons.play_arrow_solid,
-                        color: TColors.hammeAccentBlue,
-                        size: 14,
-                      ),
-                    ),
                     CupertinoTheme(
                       data: const CupertinoThemeData(
                         brightness: Brightness.light,
@@ -188,10 +185,10 @@ class _DobScreenState extends ConsumerState<DobScreen> {
                               age.toString(),
                               style: TextStyle(
                                 fontFamily: TFonts.nunito,
-                                fontSize: isSelected ? 17 : 15,
+                                fontSize: isSelected ? 20 : 15,
                                 fontWeight:
                                     isSelected
-                                        ? FontWeight.w800
+                                        ? FontWeight.w900
                                         : FontWeight.w500,
                                 color:
                                     isSelected
@@ -201,6 +198,33 @@ class _DobScreenState extends ConsumerState<DobScreen> {
                             ),
                           );
                         },
+                      ),
+                    ),
+                    Positioned(
+                      left: 16,
+                      child: GestureDetector(
+                        onTap: _decrementAge,
+                        behavior: HitTestBehavior.opaque,
+                        child: const RotatedBox(
+                          quarterTurns: 2,
+                          child: Icon(
+                            CupertinoIcons.play_arrow_solid,
+                            color: TColors.hammeAccentBlue,
+                            size: 14,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      right: 16,
+                      child: GestureDetector(
+                        onTap: _incrementAge,
+                        behavior: HitTestBehavior.opaque,
+                        child: const Icon(
+                          CupertinoIcons.play_arrow_solid,
+                          color: TColors.hammeAccentBlue,
+                          size: 14,
+                        ),
                       ),
                     ),
                   ],

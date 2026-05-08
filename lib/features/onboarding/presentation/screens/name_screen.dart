@@ -42,7 +42,7 @@ class _NameScreenState extends ConsumerState<NameScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            DobTopBar(onBack: () => context.pop(), progress: 0.5),
+            DobTopBar(onBack: () => context.go('/onboarding/dob'), progress: 0.5),
             const SizedBox(height: 30),
             const Text(
               TTexts.nameTitle,

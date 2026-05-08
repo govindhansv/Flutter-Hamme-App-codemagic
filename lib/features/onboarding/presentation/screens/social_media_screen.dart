@@ -47,7 +47,7 @@ class _SocialMediaScreenState extends ConsumerState<SocialMediaScreen> {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             DobTopBar(
-              onBack: () => context.pop(),
+              onBack: () => context.go('/onboarding/profile_upload'),
               progress: 1.0,
               trailing: GestureDetector(
                 onTap: () {
