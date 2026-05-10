@@ -1,16 +1,18 @@
 import 'dart:async';
-import 'dart:io' show File;
+import 'dart:io' show File, Platform;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hamme_app/providers/onboarding_providers.dart';
 import 'package:hamme_app/utils/constants/fonts.dart';
 import 'package:hamme_app/utils/constants/image_strings.dart';
+import 'package:appinio_social_share/appinio_social_share.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -21,64 +23,76 @@ class SharePlayingScreen extends ConsumerStatefulWidget {
   @override
   ConsumerState<SharePlayingScreen> createState() => _SharePlayingScreenState();
 
-  static const bool _enableStoryExportDebugPreview = true;
   static const double _storyPixelRatio = 1.0;
   static const Size _storyCanvasSize = Size(1080, 1920);
+  static const String _instagramAppId = '';
+  static const MethodChannel _storyChannel = MethodChannel('hamme/share_story');
 
   static Future<void> shareStory(BuildContext context, WidgetRef ref) async {
     try {
       final draft = ref.read(onboardingDraftProvider).value ?? const OnboardingDraft();
       final imageBytes = await _captureStoryFromHiddenOverlay(context, draft);
 
-      final imageInfo = await _decodeImageInfo(imageBytes);
-      debugPrint(
-        '[StoryExport] exported image dimensions: '
-        '${imageInfo.width}x${imageInfo.height}',
-      );
-      debugPrint(
-        '[StoryExport] RenderRepaintBoundary size (capture canvas): '
-        '${_storyCanvasSize.width}x${_storyCanvasSize.height}',
-      );
-      debugPrint('[StoryExport] pixelRatio used: $_storyPixelRatio');
-
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final tempDirectory = await getTemporaryDirectory();
-      final docsDirectory = await getApplicationDocumentsDirectory();
       final tempPath = '${tempDirectory.path}/hamme_story_$timestamp.png';
-      final docsPath = '${docsDirectory.path}/hamme_story_$timestamp.png';
-      final tempFile = await File(tempPath).writeAsBytes(imageBytes);
-      await File(docsPath).writeAsBytes(imageBytes);
-      final fileSize = await tempFile.length();
-      debugPrint('[StoryExport] final file path (temp): $tempPath');
-      debugPrint('[StoryExport] final file path (documents): $docsPath');
+      await File(tempPath).writeAsBytes(imageBytes);
+      debugPrint('[StoryShare] Generated file path: $tempPath');
+      debugPrint('[StoryShare] File exists: ${File(tempPath).existsSync()}');
 
       final username = draft.username?.replaceAll('@', '') ?? 'user';
       final shareLink = 'https://hamme.app/$username';
 
-      if (_enableStoryExportDebugPreview && context.mounted) {
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            fullscreenDialog: true,
-            builder:
-                (_) => _StoryExportDebugPreviewScreen(
-                  imagePath: tempPath,
-                  width: imageInfo.width,
-                  height: imageInfo.height,
-                  fileSizeBytes: fileSize,
-                  onShare:
-                      () => Share.shareXFiles(
-                        [XFile(tempPath)],
-                        text: 'What do you think of me? $shareLink',
-                      ),
-                ),
-          ),
-        );
-      } else {
-        await Share.shareXFiles(
-          [XFile(tempPath)],
-          text: 'What do you think of me? $shareLink',
-        );
+      final socialShare = AppinioSocialShare();
+      try {
+        bool instagramInstalled = false;
+        if (Platform.isAndroid) {
+          instagramInstalled =
+              await _storyChannel.invokeMethod<bool>('isInstagramInstalled') ?? false;
+        } else {
+          final installedApps = await socialShare.getInstalledApps();
+          instagramInstalled = installedApps.entries.any(
+            (entry) =>
+                entry.value &&
+                (entry.key.toLowerCase().contains('instagram') ||
+                    entry.key == 'com.instagram.android'),
+          );
+        }
+        debugPrint('[StoryShare] Instagram installed: $instagramInstalled');
+
+        if (instagramInstalled) {
+          // Direct story open (NGL-style): no chooser/share sheet.
+          if (Platform.isAndroid) {
+            final launchResult = await _storyChannel.invokeMethod<String>(
+              'shareToInstagramStory',
+              {'imagePath': tempPath, 'attributionUrl': shareLink},
+            );
+            debugPrint('[StoryShare] Android direct launch result: $launchResult');
+            if (launchResult == 'SUCCESS') {
+              return;
+            }
+          } else if (Platform.isIOS) {
+            await socialShare.iOS.shareToInstagramStory(
+              _instagramAppId,
+              backgroundImage: tempPath,
+              backgroundTopColor: '#9F6FFF',
+              backgroundBottomColor: '#9F6FFF',
+              attributionURL: shareLink,
+            );
+            return;
+          }
+        }
+      } catch (e) {
+        debugPrint('Direct Instagram story share failed: $e');
       }
+
+      // Fallback only when Instagram is not installed / not detected.
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(tempPath)],
+          text: 'What do you think of me? $shareLink',
+        ),
+      );
     } catch (e) {
       debugPrint('Error sharing story: $e');
     }
@@ -140,21 +154,14 @@ Future<Uint8List> _captureStoryFromHiddenOverlay(
   }
 }
 
-Future<({int width, int height})> _decodeImageInfo(Uint8List bytes) async {
-  final codec = await ui.instantiateImageCodec(bytes);
-  final frame = await codec.getNextFrame();
-  return (width: frame.image.width, height: frame.image.height);
-}
-
 class _SharePlayingScreenState extends ConsumerState<SharePlayingScreen> {
   @override
   void initState() {
     super.initState();
-    // Start sharing automatically and silently
+    // Start sharing automatically. Do not navigate away immediately because
+    // it can interrupt share intents on some Android devices.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      SharePlayingScreen.shareStory(context, ref).then((_) {
-        if (mounted) context.go('/home');
-      });
+      SharePlayingScreen.shareStory(context, ref);
     });
   }
 
@@ -533,67 +540,4 @@ class ArrowPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(CustomPainter oldDelegate) => false;
-}
-
-class _StoryExportDebugPreviewScreen extends StatelessWidget {
-  final String imagePath;
-  final int width;
-  final int height;
-  final int fileSizeBytes;
-  final Future<void> Function() onShare;
-
-  const _StoryExportDebugPreviewScreen({
-    required this.imagePath,
-    required this.width,
-    required this.height,
-    required this.fileSizeBytes,
-    required this.onShare,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final aspectRatio = height == 0 ? 0 : width / height;
-    final fileSizeKb = (fileSizeBytes / 1024).toStringAsFixed(1);
-
-    return Scaffold(
-      appBar: AppBar(title: const Text('Story Export Debug Preview')),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: Center(
-                child: Image.file(
-                  File(imagePath),
-                  fit: BoxFit.contain,
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-              child: Column(
-                children: [
-                  Text('Dimensions: ${width}x$height'),
-                  Text('File size: $fileSizeKb KB ($fileSizeBytes bytes)'),
-                  Text('Aspect ratio: ${aspectRatio.toStringAsFixed(4)}'),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () async {
-                        await onShare();
-                        if (context.mounted) {
-                          Navigator.of(context).pop();
-                        }
-                      },
-                      child: const Text('Share to Instagram'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
