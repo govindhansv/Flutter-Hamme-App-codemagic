@@ -7,6 +7,7 @@ const crypto = require('crypto');
 const { emitMatchFound } = require('../socket');
 
 const allowedTypes = new Set(['friend', 'crush', 'frenemy', 'ameny']);
+const PENDING_TTL_MS = 60 * 1000;
 
 function buildCanonicalPair(firstUserId, secondUserId) {
   const [userA, userB] = [firstUserId.toString(), secondUserId.toString()].sort();
@@ -105,33 +106,75 @@ async function getMatchesForUser(userId) {
   return matches.map((match) => serializeMatch(match, userId));
 }
 
-async function createAnonymousResponse({ identifier, type, source = 'web' }) {
-  const normalized = (identifier || '').trim().toLowerCase();
+async function createAnonymousResponse({
+  identifier,
+  shareCode,
+  type,
+  source = 'web',
+  timestamp,
+  sessionId,
+}) {
   const normalizedType = normalizeType(type);
+  const rawIdentifier = (shareCode || identifier || '').trim();
+  const normalized = rawIdentifier.toLowerCase();
   if (!normalized) {
-    throw new ApiError(400, 'Profile identifier is required.');
+    throw new ApiError(400, 'Share code is required.');
+  }
+
+  if (!timestamp || Number.isNaN(Number(timestamp))) {
+    throw new ApiError(400, 'Timestamp is required.');
+  }
+
+  const now = Date.now();
+  const sentAt = Number(timestamp);
+  if (now - sentAt > PENDING_TTL_MS) {
+    console.info('[AnonymousResponse] expired', { shareCode: normalized, sentAt, now });
+    throw new ApiError(400, 'This link has expired.');
   }
 
   const targetUser =
     (await User.findOne({ username: normalized })) ||
-    (await User.findOne({ shareCode: normalized }));
+    (await User.findOne({ shareCode: normalized })) ||
+    (await User.findOne({ shareCode: rawIdentifier }));
   if (!targetUser) {
     throw new ApiError(404, 'Target profile not found.');
   }
 
-  const interaction = await Interaction.create({
-    fromUser: null,
-    toUser: targetUser.id,
+  if (sessionId) {
+    const duplicate = await PendingInteraction.findOne({
+      targetUserId: targetUser.id,
+      sessionId,
+      type: normalizedType,
+      status: { $in: ['pending', 'finalized'] },
+      createdAt: { $gte: new Date(now - PENDING_TTL_MS) },
+    });
+    if (duplicate) {
+      throw new ApiError(409, 'This interaction has already been sent.');
+    }
+  }
+
+  const pending = await createPendingInteraction({
+    targetUserId: targetUser.id,
     type: normalizedType,
-    metadata: { source, anonymous: true },
+    source,
+    sessionId,
+    shareCode: targetUser.shareCode,
+  });
+
+  console.info('[AnonymousResponse] created', {
+    shareCode: targetUser.shareCode,
+    type: normalizedType,
+    pendingToken: pending.pendingToken,
   });
 
   return {
-    interactionId: interaction.id,
-    targetUserId: targetUser.id,
+    success: true,
+    isMatch: false,
+    matched: false,
+    pendingToken: pending.pendingToken,
+    expiresAt: pending.expiresAt,
     shareCode: targetUser.shareCode,
-    username: targetUser.username || null,
-    next: 'install_or_open_app',
+    type: normalizedType,
   };
 }
 
@@ -227,7 +270,13 @@ async function getReceivedInteractions(userId) {
   });
 }
 
-async function createPendingInteraction({ targetUserId, type, source = 'web' }) {
+async function createPendingInteraction({
+  targetUserId,
+  type,
+  source = 'web',
+  sessionId = null,
+  shareCode = null,
+}) {
   const normalizedType = normalizeType(type);
   const targetUser = await User.findById(targetUserId);
   if (!targetUser) {
@@ -235,12 +284,14 @@ async function createPendingInteraction({ targetUserId, type, source = 'web' }) 
   }
 
   const deepLinkToken = crypto.randomBytes(16).toString('hex');
-  const expiresAt = new Date(Date.now() + 60 * 1000); // 60 seconds
+  const expiresAt = new Date(Date.now() + PENDING_TTL_MS);
 
   const pending = await PendingInteraction.create({
     targetUserId: targetUser.id,
     type: normalizedType,
     source,
+    sessionId,
+    shareCode,
     deepLinkToken,
     expiresAt,
   });
@@ -273,7 +324,7 @@ async function createPendingInteraction({ targetUserId, type, source = 'web' }) 
       log(`Expiry failed: ${e.message}\n${e.stack}`);
       console.error('[PendingInteraction] Expiry failed:', e);
     }
-  }, 60000);
+  }, PENDING_TTL_MS);
 
   return {
     pendingToken: pending.deepLinkToken,

@@ -1,11 +1,24 @@
 const express = require('express');
 const { body } = require('express-validator');
+const isURL = require('validator/lib/isURL');
 
 const authController = require('../controllers/authController');
 const authMiddleware = require('../middleware/authMiddleware');
 const validateRequest = require('../middleware/validateRequest');
 
 const router = express.Router();
+
+const avatarUrlOptions = {
+  require_protocol: true,
+  protocols: ['http', 'https'],
+  require_tld: false,
+};
+
+function isAllowedAvatarUrl(value) {
+  if (!value) return true;
+  if (value.startsWith('/uploads/')) return true;
+  return isURL(value, avatarUrlOptions);
+}
 
 router.post(
   '/signup',
@@ -15,7 +28,9 @@ router.post(
     body('password').isLength({ min: 6, max: 64 }),
     body('instagramId').trim().notEmpty(),
     body('username').optional({ values: 'falsy' }).trim().toLowerCase().matches(/^[a-z0-9._]+$/),
-    body('profileImageUrl').optional({ values: 'falsy' }).isURL(),
+    body('profileImageUrl')
+      .optional({ values: 'falsy' })
+      .custom(isAllowedAvatarUrl),
   ],
   validateRequest,
   authController.signup
@@ -29,7 +44,9 @@ router.post(
     body('username').trim().toLowerCase().matches(/^[a-z0-9._]+$/),
     body('instagramId').optional({ values: 'falsy' }).trim(),
     body('snapchatId').optional({ values: 'falsy' }).trim(),
-    body('avatarUrl').optional({ values: 'falsy' }).isURL(),
+    body('avatarUrl')
+      .optional({ values: 'falsy' })
+      .custom(isAllowedAvatarUrl),
     body('deviceId').optional({ values: 'falsy' }).trim(),
   ],
   validateRequest,

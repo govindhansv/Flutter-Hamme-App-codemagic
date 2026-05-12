@@ -14,14 +14,24 @@ function toPublicProfile(user) {
 
 async function getPublicProfile(req, res) {
   const { user, matchedBy } = await userService.getPublicProfile(req.params.identifier);
-  return res.status(200).json({ user: toPublicProfile(user), matchedBy });
+  const expiresAt = new Date(Date.now() + 60 * 1000);
+  return res.status(200).json({
+    user: toPublicProfile(user),
+    matchedBy,
+    shareCode: user.shareCode,
+    expiresAt,
+    isExpired: false,
+  });
 }
 
 async function createAnonymousResponse(req, res) {
   const result = await interactionService.createAnonymousResponse({
     identifier: req.body.identifier,
+    shareCode: req.body.shareCode,
     type: req.body.type,
     source: req.body.source || 'web',
+    timestamp: req.body.timestamp,
+    sessionId: req.body.sessionId,
   });
   return res.status(201).json(result);
 }

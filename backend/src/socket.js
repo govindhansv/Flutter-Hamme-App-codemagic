@@ -7,7 +7,7 @@ let ioInstance = null;
 function initializeSocket(server) {
   ioInstance = new Server(server, {
     cors: {
-      origin: env.clientOrigin,
+      origin: env.clientOrigin === '*' ? true : env.clientOrigin,
       credentials: true,
     },
   });

@@ -16,8 +16,11 @@ router.get(
 router.post(
   '/anonymous-response',
   [
-    body('identifier').trim().notEmpty(),
+    body('shareCode').optional({ values: 'falsy' }).trim(),
+    body('identifier').optional({ values: 'falsy' }).trim(),
     body('type').isIn(['friend', 'crush', 'frenemy']),
+    body('timestamp').isNumeric(),
+    body('sessionId').optional({ values: 'falsy' }).trim(),
     body('source').optional({ values: 'falsy' }).trim(),
   ],
   validateRequest,

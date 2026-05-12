@@ -16,6 +16,16 @@ const pendingInteractionSchema = new mongoose.Schema(
       type: String,
       default: 'web_local',
     },
+    sessionId: {
+      type: String,
+      default: null,
+      index: true,
+    },
+    shareCode: {
+      type: String,
+      default: null,
+      index: true,
+    },
     status: {
       type: String,
       enum: ['pending', 'finalized', 'expired'],
@@ -43,5 +53,7 @@ const pendingInteractionSchema = new mongoose.Schema(
     },
   }
 );
+
+pendingInteractionSchema.index({ targetUserId: 1, sessionId: 1, type: 1, status: 1 });
 
 module.exports = mongoose.model('PendingInteraction', pendingInteractionSchema);

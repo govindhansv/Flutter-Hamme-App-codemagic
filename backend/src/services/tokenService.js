@@ -14,12 +14,12 @@ function createRefreshToken(user) {
   });
 }
 
-function verifyAccessToken(token) {
-  return jwt.verify(token, env.jwtAccessSecret);
+function verifyAccessToken(token, options = {}) {
+  return jwt.verify(token, env.jwtAccessSecret, options);
 }
 
-function verifyRefreshToken(token) {
-  return jwt.verify(token, env.jwtRefreshSecret);
+function verifyRefreshToken(token, options = {}) {
+  return jwt.verify(token, env.jwtRefreshSecret, options);
 }
 
 module.exports = {

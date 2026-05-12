@@ -28,7 +28,7 @@ subprojects {
             val target = if (project.name == "flutter_secure_storage") "17" else "11"
             
             try {
-                android.compileSdkVersion("android-34")
+                android.compileSdkVersion("android-36")
                 android.compileOptions {
                     sourceCompatibility = if (target == "17") JavaVersion.VERSION_17 else JavaVersion.VERSION_11
                     targetCompatibility = if (target == "17") JavaVersion.VERSION_17 else JavaVersion.VERSION_11

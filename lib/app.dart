@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'routes/app_router.dart';
 import 'utils/theme/theme.dart';
 import 'providers/deferred_interaction_provider.dart';
+import 'models/interaction_type.dart';
 import 'providers/interaction_providers.dart';
 
 class HammeApp extends ConsumerStatefulWidget {
@@ -47,12 +48,58 @@ class _HammeAppState extends ConsumerState<HammeApp> {
 
   void _handleDeepLink(Uri uri) {
     debugPrint('[DeepLink] Incoming: $uri');
-    // hamme://reveal/<token>
-    if (uri.scheme == 'hamme' && uri.host == 'reveal') {
-      final token = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
-      if (token != null) {
-        ref.read(deferredInteractionTokenProvider.notifier).state = token;
+    if (uri.scheme == 'hamme') {
+      if (uri.host == 'reveal') {
+        final token = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
+        if (token != null) {
+          ref.read(deferredInteractionTokenProvider.notifier).state = token;
+        }
       }
+
+      if (uri.host == 'open') {
+        final token = uri.queryParameters['token'];
+        final shareCode = uri.queryParameters['code'];
+        final typeValue = uri.queryParameters['type'];
+
+        if (token != null && token.isNotEmpty) {
+          ref.read(deferredInteractionTokenProvider.notifier).state = token;
+        }
+
+        if (shareCode != null && shareCode.isNotEmpty) {
+          ref.read(deferredShareCodeProvider.notifier).state = shareCode;
+        }
+
+        final parsedType = _parseInteractionType(typeValue);
+        if (parsedType != null) {
+          ref.read(deferredInteractionTypeProvider.notifier).state = parsedType;
+        }
+
+        debugPrint('[DeepLink] parsed open link: code=$shareCode type=$typeValue token=${token != null}');
+      }
+    }
+
+    if (uri.scheme == 'https' && uri.host == 'app.hamme.link') {
+      final segments = uri.pathSegments;
+      if (segments.length >= 2 && segments[0] == 'u') {
+        final shareCode = segments[1];
+        ref.read(deferredShareCodeProvider.notifier).state = shareCode;
+        debugPrint('[DeepLink] parsed web link: code=$shareCode');
+      }
+    }
+  }
+
+  InteractionType? _parseInteractionType(String? value) {
+    if (value == null || value.isEmpty) return null;
+    switch (value.toLowerCase()) {
+      case 'crush':
+        return InteractionType.crush;
+      case 'friend':
+        return InteractionType.friend;
+      case 'frenemy':
+      case 'ameny':
+        return InteractionType.frenemy;
+      default:
+        return null;
     }
   }
 

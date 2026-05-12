@@ -4,6 +4,8 @@ const players = ['S', 'K', 'R', 'N', 'A'];
 const fallbackProfileImage = 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=240&q=80';
 const playerColors = ['#ff4f97', '#35d678', '#42b6ff', '#ffd230', '#ff5c5c'];
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000/api/v1';
+const sessionStorageKey = 'hamme_web_session_id';
+const pendingTtlMs = 60 * 1000;
 
 function readShareCodeFromPath() {
   const parts = window.location.pathname.split('/').filter(Boolean);
@@ -14,29 +16,39 @@ function readShareCodeFromPath() {
   return null;
 }
 
+function generateSessionId() {
+  if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+    return window.crypto.randomUUID();
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 function App() {
   const [isSent, setIsSent] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(60);
+  const [expiresAt, setExpiresAt] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [profileError, setProfileError] = useState('');
   const [submittingType, setSubmittingType] = useState('');
+  const [selectedType, setSelectedType] = useState('');
   const [submitError, setSubmitError] = useState('');
   const [interactionResult, setInteractionResult] = useState(null);
   const isExpired = secondsLeft === 0;
   const shareCode = readShareCodeFromPath();
 
   useEffect(() => {
-    if (!isSent || secondsLeft === 0) {
+    if (!isSent || !expiresAt) {
       return undefined;
     }
 
     const timer = setInterval(() => {
-      setSecondsLeft((seconds) => Math.max(seconds - 1, 0));
+      const remainingMs = new Date(expiresAt).getTime() - Date.now();
+      setSecondsLeft(Math.max(Math.ceil(remainingMs / 1000), 0));
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [isSent, secondsLeft]);
+  }, [isSent, expiresAt]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -58,7 +70,18 @@ function App() {
         }
         const data = await response.json();
         setProfile(data.user ?? null);
+        if (data.expiresAt) {
+          const expires = new Date(data.expiresAt);
+          setExpiresAt(expires.toISOString());
+          const remainingMs = expires.getTime() - Date.now();
+          setSecondsLeft(Math.max(Math.ceil(remainingMs / 1000), 0));
+        } else {
+          const fallbackExpires = new Date(Date.now() + pendingTtlMs);
+          setExpiresAt(fallbackExpires.toISOString());
+          setSecondsLeft(Math.ceil(pendingTtlMs / 1000));
+        }
         setProfileError('');
+        console.info('[Web] link opened', { shareCode });
       } catch (error) {
         if (error.name !== 'AbortError') {
           setProfileError('Profile not found.');
@@ -74,19 +97,27 @@ function App() {
 
   const handleAnswer = async (type) => {
     setSubmittingType(type);
+    setSelectedType(type);
     setSubmitError('');
     try {
-      if (!profile?.id) {
-        throw new Error('Missing target profile id');
+      if (!shareCode) {
+        throw new Error('Missing share code');
       }
 
-      // Use pending interaction for the reveal flow
-      const response = await fetch(`${apiBaseUrl}/interactions/pending`, {
+      const now = Date.now();
+      const sessionId =
+        window.localStorage.getItem(sessionStorageKey) ??
+        generateSessionId();
+      window.localStorage.setItem(sessionStorageKey, sessionId);
+
+      const response = await fetch(`${apiBaseUrl}/anonymous-response`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          targetUserId: profile.id,
+          shareCode,
           type,
+          timestamp: now,
+          sessionId,
           source: 'web_local',
         }),
       });
@@ -96,7 +127,17 @@ function App() {
       const data = await response.json();
       setInteractionResult(data); // contains pendingToken
       setIsSent(true);
-      setSecondsLeft(60);
+      if (data.expiresAt) {
+        const expires = new Date(data.expiresAt);
+        setExpiresAt(expires.toISOString());
+        const remainingMs = expires.getTime() - Date.now();
+        setSecondsLeft(Math.max(Math.ceil(remainingMs / 1000), 0));
+      } else {
+        const fallbackExpires = new Date(now + pendingTtlMs);
+        setExpiresAt(fallbackExpires.toISOString());
+        setSecondsLeft(Math.ceil(pendingTtlMs / 1000));
+      }
+      console.info('[Web] option selected', { shareCode, type });
     } catch (_) {
       setSubmitError('Could not submit response. Please try again.');
     } finally {
@@ -136,8 +177,10 @@ function App() {
             isExpired={isExpired}
             profileName={profileName}
             profileImage={profileImage}
-            isMatch={interactionResult?.matched}
+            isMatch={interactionResult?.isMatch ?? interactionResult?.matched}
             pendingToken={interactionResult?.pendingToken}
+            shareCode={shareCode}
+            selectedType={selectedType}
           />
         ) : (
           <QuestionScreen
@@ -198,23 +241,38 @@ function QuestionScreen({ onAnswer, profileImage, submittingType, submitError })
   );
 }
 
-function RevealScreen({ secondsLeft, isExpired, profileName, profileImage, isMatch, pendingToken }) {
+function RevealScreen({
+  secondsLeft,
+  isExpired,
+  profileName,
+  profileImage,
+  isMatch,
+  pendingToken,
+  shareCode,
+  selectedType,
+}) {
   const handleReveal = () => {
-    if (isExpired || !pendingToken) return;
+    if (isExpired || (!pendingToken && !shareCode)) return;
 
     const userAgent = navigator.userAgent || navigator.vendor || window.opera;
     const isAndroid = /android/i.test(userAgent);
     const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream;
 
     // Custom URI scheme for deep linking
-    const deepLink = `hamme://reveal/${pendingToken}`;
+    const params = new URLSearchParams();
+    if (shareCode) params.set('code', shareCode);
+    if (selectedType) params.set('type', selectedType);
+    if (pendingToken) params.set('token', pendingToken);
+    const deepLink = `hamme://open?${params.toString()}`;
     
     // Fallback store links (using Local LAN for now to avoid SSL/Config issues)
     const playStoreUrl = 'https://play.google.com/store/apps/details?id=com.hamme.app';
     const appStoreUrl = 'https://apps.apple.com/app/hamme-play-games/id123456789';
-    const fallbackUrl = 'http://192.168.1.36:5173'; // Point back to web app locally
+    const fallbackUrl = window.location.origin;
 
     window.location.href = deepLink;
+
+    console.info('[Web] deep link triggered', { deepLink });
 
     // Redirect to store if app not installed (after a short delay)
     setTimeout(() => {

@@ -13,6 +13,7 @@ import '../models/match_record.dart';
 import 'api_providers.dart';
 import 'auth_providers.dart';
 import 'deferred_interaction_provider.dart';
+import 'onboarding_providers.dart';
 
 final interactionRemoteDataSourceProvider =
     Provider<InteractionRemoteDataSource>((ref) {
@@ -74,19 +75,38 @@ final interactionControllerProvider =
 // Provider that listens for auth and deferred token to trigger finalize automatically
 final deferredInteractionFinalizerProvider = Provider<void>((ref) {
   final authStatus = ref.watch(authStatusProvider);
+  final onboardingComplete = ref.watch(onboardingCompletionProvider).value ?? false;
   final token = ref.watch(deferredInteractionTokenProvider);
+  final shareCode = ref.watch(deferredShareCodeProvider);
+  final interactionType = ref.watch(deferredInteractionTypeProvider);
 
-  if (authStatus == AuthStatus.authenticated && token != null) {
-    debugPrint('[DeferredInteraction] Auto-finalizing token: $token');
-    // We execute this in microtask to avoid side effects during build
-    Future.microtask(() async {
-      try {
-        await ref.read(interactionControllerProvider.notifier).finalizeInteraction(token);
-        ref.read(deferredInteractionTokenProvider.notifier).state = null;
-      } catch (e) {
-        debugPrint('[DeferredInteraction] Finalize failed: $e');
-      }
-    });
+  if (authStatus == AuthStatus.authenticated && onboardingComplete) {
+    if (token != null) {
+      debugPrint('[DeferredInteraction] Auto-finalizing token: $token');
+      Future.microtask(() async {
+        try {
+          await ref.read(interactionControllerProvider.notifier).finalizeInteraction(token);
+          ref.read(deferredInteractionTokenProvider.notifier).state = null;
+        } catch (e) {
+          debugPrint('[DeferredInteraction] Finalize failed: $e');
+        }
+      });
+    }
+
+    if (shareCode != null && interactionType != null) {
+      debugPrint('[DeferredInteraction] Auto-sending shareCode: $shareCode type=${interactionType.name}');
+      Future.microtask(() async {
+        try {
+          await ref
+              .read(interactionControllerProvider.notifier)
+              .sendInteraction(shareCode: shareCode, type: interactionType);
+          ref.read(deferredShareCodeProvider.notifier).state = null;
+          ref.read(deferredInteractionTypeProvider.notifier).state = null;
+        } catch (e) {
+          debugPrint('[DeferredInteraction] ShareCode send failed: $e');
+        }
+      });
+    }
   }
 });
 

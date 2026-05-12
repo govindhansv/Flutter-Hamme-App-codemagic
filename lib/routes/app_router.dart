@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 
+import '../features/onboarding/presentation/screens/deeplink_screen.dart';
 import '../features/onboarding/presentation/screens/dob_screen.dart';
 import '../features/onboarding/presentation/screens/name_screen.dart';
 import '../features/home/presentation/screens/home_screen.dart';
@@ -26,6 +27,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     initialLocation: '/splash',
     routes: [
       GoRoute(path: '/splash', builder: (_, _) => const SplashScreen()),
+      GoRoute(
+        path: '/onboarding/deeplink',
+        builder: (_, _) => const DeepLinkScreen(),
+      ),
       GoRoute(path: '/onboarding/dob', builder: (_, _) => const DobScreen()),
       GoRoute(path: '/onboarding/name', builder: (_, _) => const NameScreen()),
       GoRoute(
@@ -71,7 +76,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         if (authStatus == AuthStatus.authenticated && isOnboardingComplete) {
           return '/home';
         }
-        return '/onboarding/dob';
+        return '/onboarding/deeplink';
       }
 
       if (!isLoading && isOnboardingComplete && isOnboardingRoute) {
