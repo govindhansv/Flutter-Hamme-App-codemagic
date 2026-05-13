@@ -20,6 +20,15 @@ class _DeepLinkScreenState extends ConsumerState<DeepLinkScreen> {
   final TextEditingController _linkController = TextEditingController();
   String _error = '';
   InteractionType? _selectedType;
+  bool _autoHandledDeferredLink = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _hydrateFromDeferredLink();
+    });
+  }
 
   @override
   void dispose() {
@@ -58,7 +67,8 @@ class _DeepLinkScreenState extends ConsumerState<DeepLinkScreen> {
       if (uri.scheme == 'hamme' && uri.host == 'open') {
         final shareCode = uri.queryParameters['code'];
         final type = _parseInteractionType(uri.queryParameters['type']);
-        return (shareCode: shareCode, type: type, token: null);
+        final token = uri.queryParameters['token'];
+        return (shareCode: shareCode, type: type, token: token);
       }
 
       if (uri.scheme == 'hamme' && uri.host == 'reveal') {
@@ -78,12 +88,64 @@ class _DeepLinkScreenState extends ConsumerState<DeepLinkScreen> {
     return (shareCode: trimmed, type: null, token: null);
   }
 
+  String? _buildDeferredLink({
+    required String? shareCode,
+    required InteractionType? type,
+    required String? token,
+  }) {
+    if (token != null && token.isNotEmpty) {
+      final params = <String, String>{'token': token};
+      if (shareCode != null && shareCode.isNotEmpty) {
+        params['code'] = shareCode;
+      }
+      if (type != null) {
+        params['type'] = type.name;
+      }
+      final query = Uri(queryParameters: params).query;
+      return 'hamme://open?$query';
+    }
+
+    if (shareCode != null && shareCode.isNotEmpty) {
+      if (type == null) {
+        return shareCode;
+      }
+      final query = Uri(
+        queryParameters: {'code': shareCode, 'type': type.name},
+      ).query;
+      return 'hamme://open?$query';
+    }
+
+    return null;
+  }
+
+  void _hydrateFromDeferredLink() {
+    if (_autoHandledDeferredLink) return;
+    final token = ref.read(deferredInteractionTokenProvider);
+    final shareCode = ref.read(deferredShareCodeProvider);
+    final type = ref.read(deferredInteractionTypeProvider);
+
+    final builtLink = _buildDeferredLink(
+      shareCode: shareCode,
+      type: type,
+      token: token,
+    );
+    if (builtLink == null) return;
+
+    _autoHandledDeferredLink = true;
+    _linkController.text = builtLink;
+    if (type != null) {
+      setState(() => _selectedType = type);
+    }
+    _submit();
+  }
+
   void _submit() {
     final parsed = _parseDeepLink(_linkController.text);
     if (parsed.token != null && parsed.token!.isNotEmpty) {
       ref.read(deferredInteractionTokenProvider.notifier).state = parsed.token;
-      ref.read(deferredShareCodeProvider.notifier).state = null;
-      ref.read(deferredInteractionTypeProvider.notifier).state = null;
+      ref.read(deferredShareCodeProvider.notifier).state = parsed.shareCode;
+      final resolvedType = parsed.type ?? _selectedType;
+      ref.read(deferredInteractionTypeProvider.notifier).state = resolvedType;
       setState(() => _error = '');
       context.go('/onboarding/dob');
       return;
