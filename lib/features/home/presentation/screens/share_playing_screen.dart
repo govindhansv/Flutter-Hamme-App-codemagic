@@ -18,7 +18,8 @@ import 'package:path_provider/path_provider.dart';
 
 class SharePlayingScreen extends ConsumerStatefulWidget {
   final bool autoShare;
-  const SharePlayingScreen({super.key, this.autoShare = false});
+  final String? platform;
+  const SharePlayingScreen({super.key, this.autoShare = false, this.platform});
 
   @override
   ConsumerState<SharePlayingScreen> createState() => _SharePlayingScreenState();
@@ -28,66 +29,98 @@ class SharePlayingScreen extends ConsumerStatefulWidget {
   static const String _instagramAppId = '';
   static const MethodChannel _storyChannel = MethodChannel('hamme/share_story');
 
-  static Future<void> shareStory(BuildContext context, WidgetRef ref) async {
+  static Future<void> shareStory(
+    BuildContext context,
+    WidgetRef ref, {
+    String? platform,
+  }) async {
     try {
-      final draft = ref.read(onboardingDraftProvider).value ?? const OnboardingDraft();
+      final draft =
+          ref.read(onboardingDraftProvider).value ?? const OnboardingDraft();
       final imageBytes = await _captureStoryFromHiddenOverlay(context, draft);
 
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final tempDirectory = await getTemporaryDirectory();
       final tempPath = '${tempDirectory.path}/hamme_story_$timestamp.png';
       await File(tempPath).writeAsBytes(imageBytes);
-      debugPrint('[StoryShare] Generated file path: $tempPath');
-      debugPrint('[StoryShare] File exists: ${File(tempPath).existsSync()}');
 
       final session = ref.read(authControllerProvider).value;
       final shareCode = session?.user.shareCode;
       final shareLink = AppConstants.buildUserShareLink(shareCode);
 
       final socialShare = AppinioSocialShare();
-      try {
-        bool instagramInstalled = false;
-        if (Platform.isAndroid) {
-          instagramInstalled =
-              await _storyChannel.invokeMethod<bool>('isInstagramInstalled') ?? false;
-        } else {
-          final installedApps = await socialShare.getInstalledApps();
-          instagramInstalled = installedApps.entries.any(
-            (entry) =>
-                entry.value &&
-                (entry.key.toLowerCase().contains('instagram') ||
-                    entry.key == 'com.instagram.android'),
-          );
-        }
-        debugPrint('[StoryShare] Instagram installed: $instagramInstalled');
 
-        if (instagramInstalled) {
-          // Direct story open (NGL-style): no chooser/share sheet.
+      if (platform == 'snapchat') {
+        try {
           if (Platform.isAndroid) {
-            final launchResult = await _storyChannel.invokeMethod<String>(
-              'shareToInstagramStory',
-              {'imagePath': tempPath, 'attributionUrl': shareLink},
+            final isInstalled =
+                await _storyChannel.invokeMethod<bool>(
+                  'isSnapchatInstalled',
+                ) ??
+                false;
+            if (isInstalled) {
+              final launchResult = await _storyChannel.invokeMethod<String>(
+                'shareToSnapchatStory',
+                {'imagePath': tempPath, 'attributionUrl': shareLink},
+              );
+              if (launchResult == 'SUCCESS') return;
+            }
+          }
+          // iOS or fallback
+          await SharePlus.instance.share(
+            ShareParams(
+              files: [XFile(tempPath)],
+              text: 'What do you think of me? $shareLink',
+            ),
+          );
+          return;
+        } catch (e) {
+          debugPrint('Snapchat share failed: $e');
+        }
+      } else {
+        // Instagram Logic
+        try {
+          bool instagramInstalled = false;
+          if (Platform.isAndroid) {
+            instagramInstalled =
+                await _storyChannel.invokeMethod<bool>(
+                  'isInstagramInstalled',
+                ) ??
+                false;
+          } else {
+            final installedApps = await socialShare.getInstalledApps();
+            instagramInstalled = installedApps.entries.any(
+              (entry) =>
+                  entry.value &&
+                  (entry.key.toLowerCase().contains('instagram') ||
+                      entry.key == 'com.instagram.android'),
             );
-            debugPrint('[StoryShare] Android direct launch result: $launchResult');
-            if (launchResult == 'SUCCESS') {
+          }
+
+          if (instagramInstalled) {
+            if (Platform.isAndroid) {
+              final launchResult = await _storyChannel.invokeMethod<String>(
+                'shareToInstagramStory',
+                {'imagePath': tempPath, 'attributionUrl': shareLink},
+              );
+              if (launchResult == 'SUCCESS') return;
+            } else if (Platform.isIOS) {
+              await socialShare.iOS.shareToInstagramStory(
+                _instagramAppId,
+                backgroundImage: tempPath,
+                backgroundTopColor: '#9F6FFF',
+                backgroundBottomColor: '#9F6FFF',
+                attributionURL: shareLink,
+              );
               return;
             }
-          } else if (Platform.isIOS) {
-            await socialShare.iOS.shareToInstagramStory(
-              _instagramAppId,
-              backgroundImage: tempPath,
-              backgroundTopColor: '#9F6FFF',
-              backgroundBottomColor: '#9F6FFF',
-              attributionURL: shareLink,
-            );
-            return;
           }
+        } catch (e) {
+          debugPrint('Instagram story share failed: $e');
         }
-      } catch (e) {
-        debugPrint('Direct Instagram story share failed: $e');
       }
 
-      // Fallback only when Instagram is not installed / not detected.
+      // Fallback
       await SharePlus.instance.share(
         ShareParams(
           files: [XFile(tempPath)],
@@ -118,10 +151,7 @@ Future<Uint8List> _captureStoryFromHiddenOverlay(
             child: SizedBox(
               width: SharePlayingScreen._storyCanvasSize.width,
               height: SharePlayingScreen._storyCanvasSize.height,
-              child: StoryExportWidget(
-                key: exportRootKey,
-                draft: draft,
-              ),
+              child: StoryExportWidget(key: exportRootKey, draft: draft),
             ),
           ),
         ),
@@ -130,17 +160,15 @@ Future<Uint8List> _captureStoryFromHiddenOverlay(
   Overlay.of(context, rootOverlay: true).insert(entry);
   try {
     await Future.delayed(const Duration(milliseconds: 500));
-    final exportRootSize = exportRootKey.currentContext?.size;
-    debugPrint('[StoryExport] StoryExportWidget size: $exportRootSize');
     final boundary =
         boundaryKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
     if (boundary == null) {
       throw StateError('Export boundary not available.');
     }
 
-    debugPrint('[StoryExport] boundary.size: ${boundary.size}');
-    final image = await boundary.toImage(pixelRatio: SharePlayingScreen._storyPixelRatio);
-    debugPrint('[StoryExport] exported image dimensions: ${image.width}x${image.height}');
+    final image = await boundary.toImage(
+      pixelRatio: SharePlayingScreen._storyPixelRatio,
+    );
     final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
     if (byteData == null) {
       throw StateError('Failed to convert exported image to PNG bytes.');
@@ -164,51 +192,15 @@ class _SharePlayingScreenState extends ConsumerState<SharePlayingScreen>
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     // Start sharing automatically. Do not navigate away immediately because
     // it can interrupt share intents on some Android devices.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _startShareFlow();
+      SharePlayingScreen.shareStory(context, ref);
     });
   }
 
-  Future<void> _startShareFlow() async {
-    await SharePlayingScreen.shareStory(context, ref);
-    _shareLaunchFinished = true;
 
-    // If we never left app (share sheet canceled/not opened), exit now.
-    if (!_didEnterBackground) {
-      _exitLoader();
-    }
-  }
 
-  void _exitLoader() {
-    if (_didExitLoader || !mounted) return;
-    _didExitLoader = true;
-    final router = GoRouter.of(context);
-    if (router.canPop()) {
-      context.pop();
-    } else {
-      context.go('/home');
-    }
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.inactive ||
-        state == AppLifecycleState.paused) {
-      _didEnterBackground = true;
-    }
-    if (state == AppLifecycleState.resumed && _shareLaunchFinished) {
-      _exitLoader();
-    }
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
   @override
   Widget build(BuildContext context) {
     // Show a minimal loader while capturing silently
