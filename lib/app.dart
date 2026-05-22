@@ -8,6 +8,8 @@ import 'utils/theme/theme.dart';
 import 'providers/deferred_interaction_provider.dart';
 import 'models/interaction_type.dart';
 import 'providers/interaction_providers.dart';
+import 'core/constants/app_constants.dart';
+import 'core/services/install_referrer_service.dart';
 
 class HammeApp extends ConsumerStatefulWidget {
   const HammeApp({super.key});
@@ -19,11 +21,14 @@ class HammeApp extends ConsumerStatefulWidget {
 class _HammeAppState extends ConsumerState<HammeApp> {
   late AppLinks _appLinks;
   StreamSubscription<Uri>? _linkSubscription;
+  final InstallReferrerService _installReferrerService = InstallReferrerService();
+  bool _referrerChecked = false;
 
   @override
   void initState() {
     super.initState();
     _initDeepLinks();
+    _initInstallReferrer();
   }
 
   @override
@@ -78,7 +83,7 @@ class _HammeAppState extends ConsumerState<HammeApp> {
       }
     }
 
-    if (uri.scheme == 'https' && uri.host == 'app.hamme.link') {
+    if (uri.scheme == 'https' && uri.host == AppConstants.appHost) {
       final segments = uri.pathSegments;
       if (segments.length >= 2 && segments[0] == 'u') {
         final shareCode = segments[1];
@@ -86,6 +91,29 @@ class _HammeAppState extends ConsumerState<HammeApp> {
         debugPrint('[DeepLink] parsed web link: code=$shareCode');
       }
     }
+  }
+
+  Future<void> _initInstallReferrer() async {
+    if (_referrerChecked) return;
+    _referrerChecked = true;
+
+    final payload = await _installReferrerService.readPayload();
+    if (payload == null || !payload.hasUsefulData) return;
+
+    if (payload.token != null && payload.token!.isNotEmpty) {
+      ref.read(deferredInteractionTokenProvider.notifier).state = payload.token;
+    }
+    if (payload.shareCode != null && payload.shareCode!.isNotEmpty) {
+      ref.read(deferredShareCodeProvider.notifier).state = payload.shareCode;
+    }
+    final parsedType = _parseInteractionType(payload.type);
+    if (parsedType != null) {
+      ref.read(deferredInteractionTypeProvider.notifier).state = parsedType;
+    }
+
+    debugPrint(
+      '[InstallReferrer] parsed: token=${payload.token != null} code=${payload.shareCode}',
+    );
   }
 
   InteractionType? _parseInteractionType(String? value) {
