@@ -1,3 +1,17 @@
+can i controll that  using that above variable ? if it true call directly to server , if it not then playstore. another issue is after upgrading to pro manually through admin panel some pro features are not available.
+
+
+
+i can't click on rewind and poll again. so fix it
+
+
+
+upgrade to pro button failed
+after pro through admin panel , pro feature not worked.
+
+
+
+
 also once requested and interacted , block a new interaction for next 24 hours too. 
 
 
