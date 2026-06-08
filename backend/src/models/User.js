@@ -53,6 +53,28 @@ const userSchema = new mongoose.Schema(
       default: null,
       trim: true,
     },
+    isPro: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    proProductId: {
+      type: String,
+      default: null,
+    },
+    proPlatform: {
+      type: String,
+      default: null,
+    },
+    proPurchaseToken: {
+      type: String,
+      default: null,
+      select: false,
+    },
+    proUpdatedAt: {
+      type: Date,
+      default: null,
+    },
     birthday: {
       type: Date,
       default: null,
@@ -86,9 +108,13 @@ const userSchema = new mongoose.Schema(
       versionKey: false,
       transform: (_, ret) => {
         ret.id = ret._id.toString();
+        // Expose the profile image as `avatarUrl` (single canonical field).
+        ret.avatarUrl = ret.profileImageUrl ?? null;
         delete ret._id;
         delete ret.passwordHash;
         delete ret.refreshTokens;
+        delete ret.profileImageUrl;
+        delete ret.proPurchaseToken;
         return ret;
       },
     },

@@ -85,7 +85,7 @@ class AuthController extends AsyncNotifier<AuthSession?> {
     required String email,
     required String password,
     required String instagramId,
-    String? profileImageUrl,
+    String? avatarUrl,
   }) async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(
@@ -94,7 +94,7 @@ class AuthController extends AsyncNotifier<AuthSession?> {
         email: email,
         password: password,
         instagramId: instagramId,
-        profileImageUrl: profileImageUrl,
+        avatarUrl: avatarUrl,
       ),
     );
   }

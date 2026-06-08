@@ -14,6 +14,7 @@ import '../features/onboarding/presentation/screens/profile_upload_screen.dart';
 import '../features/onboarding/presentation/screens/pro_screen.dart';
 import '../features/onboarding/presentation/screens/social_media_screen.dart';
 import '../features/onboarding/presentation/screens/splash_screen.dart';
+import '../features/profile/presentation/screens/profile_screen.dart';
 import '../providers/auth_providers.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -37,7 +38,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (_, _) => const SocialMediaScreen(),
       ),
       GoRoute(path: '/onboarding/pro', builder: (_, _) => const ProScreen()),
+      GoRoute(
+        path: '/pro',
+        builder: (_, _) => const ProScreen(isOnboarding: false),
+      ),
       GoRoute(path: '/home', builder: (_, _) => const HomeScreen()),
+      GoRoute(path: '/profile', builder: (_, _) => const ProfileScreen()),
       GoRoute(path: '/matches', builder: (_, _) => const MatchesScreen()),
       GoRoute(path: '/inbox', builder: (_, _) => const InboxScreen()),
       GoRoute(path: '/play', builder: (_, _) => const PlayScreen()),

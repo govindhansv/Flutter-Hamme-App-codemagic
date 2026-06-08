@@ -49,7 +49,7 @@ function randomGuestPassword() {
   return `${Math.random().toString(36).slice(2)}${Date.now()}!Aa1`;
 }
 
-async function signup({ name, email, password, instagramId, profileImageUrl, username }) {
+async function signup({ name, email, password, instagramId, avatarUrl, profileImageUrl, username }) {
   const existingUser = await User.findOne({ email: email.toLowerCase() });
   if (existingUser) {
     throw new ApiError(409, 'An account with this email already exists.');
@@ -58,6 +58,7 @@ async function signup({ name, email, password, instagramId, profileImageUrl, use
   const shareCode = await createUniqueShareCode(name);
   const normalizedUsername = normalizeUsername(username || instagramId);
   const passwordHash = await bcrypt.hash(password, 12);
+  const resolvedAvatar = avatarUrl || profileImageUrl;
 
   const user = await User.create({
     name,
@@ -65,7 +66,7 @@ async function signup({ name, email, password, instagramId, profileImageUrl, use
     instagramId,
     username: normalizedUsername,
     passwordHash,
-    profileImageUrl: profileImageUrl || buildDefaultAvatarUrl(name),
+    profileImageUrl: resolvedAvatar || buildDefaultAvatarUrl(name),
     shareCode,
   });
 

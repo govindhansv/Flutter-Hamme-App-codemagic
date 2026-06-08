@@ -30,9 +30,14 @@ async function updateMe(userId, updates) {
   const allowedUpdates = {
     name: updates.name,
     instagramId: updates.instagramId,
-    profileImageUrl: updates.profileImageUrl,
+    profileImageUrl: updates.avatarUrl ?? updates.profileImageUrl,
     username: normalizedUsername || updates.username,
   };
+
+  // Drop undefined keys so we never overwrite existing values with `undefined`.
+  Object.keys(allowedUpdates).forEach((key) => {
+    if (allowedUpdates[key] === undefined) delete allowedUpdates[key];
+  });
 
   const user = await User.findByIdAndUpdate(userId, allowedUpdates, {
     new: true,
@@ -46,8 +51,7 @@ async function updateMe(userId, updates) {
   return user;
 }
 
-async function getPublicProfile(identifier) {
-  const rawValue = (identifier || '').trim();
+async function getPublicProfile(identifier) {  const rawValue = (identifier || '').trim();
   const normalizedValue = rawValue.toLowerCase();
   if (!rawValue) {
     throw new ApiError(404, 'Profile not found.');

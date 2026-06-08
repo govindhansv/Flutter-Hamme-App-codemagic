@@ -40,7 +40,6 @@ class MatchShareExportWidget extends StatelessWidget {
           label: 'Friend',
         );
       case InteractionType.frenemy:
-      case InteractionType.ameny:
         return const _MatchExportTheme(
           gradientStart: Color(0xFF7B5EA7),
           gradientEnd: Color(0xFFB59FD8),

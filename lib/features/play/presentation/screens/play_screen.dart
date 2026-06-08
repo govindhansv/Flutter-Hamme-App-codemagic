@@ -266,7 +266,7 @@ class _MatchViewState extends ConsumerState<_MatchView> {
       final otherName = match?.matchedUser.name.trim()
           ?? interaction.fromUserName?.trim()
           ?? 'Someone';
-      final otherImageUrl = match?.matchedUser.profileImageUrl
+      final otherImageUrl = match?.matchedUser.avatarUrl
           ?? interaction.fromUserProfileImageUrl;
       final myImageUrl = ref.read(onboardingDraftProvider).value?.profileImageUrl;
 
@@ -321,7 +321,6 @@ class _MatchViewState extends ConsumerState<_MatchView> {
           label: 'Friend',
         );
       case InteractionType.frenemy:
-      case InteractionType.ameny:
         return const _MatchTheme(
           gradientStart: Color(0xFF7B5EA7),
           gradientEnd: Color(0xFFB59FD8),
@@ -343,7 +342,7 @@ class _MatchViewState extends ConsumerState<_MatchView> {
         ?? interaction.fromUserName?.trim()
         ?? interaction.fromUserUsername?.trim()
         ?? 'Someone';
-    final otherImageUrl = match?.matchedUser.profileImageUrl
+    final otherImageUrl = match?.matchedUser.avatarUrl
         ?? interaction.fromUserProfileImageUrl;
     final otherInstagram = match?.matchedUser.instagramId ?? '';
     final otherSnap = interaction.fromUserSnapchatId ?? '';

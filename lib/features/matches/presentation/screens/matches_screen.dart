@@ -165,8 +165,8 @@ class _MatchTile extends StatelessWidget {
               color: Color(0xFFE5E5EA),
             ),
             clipBehavior: Clip.antiAlias,
-            child: user.profileImageUrl != null && user.profileImageUrl!.isNotEmpty
-                ? Image.network(user.profileImageUrl!, fit: BoxFit.cover)
+            child: user.avatarUrl != null && user.avatarUrl!.isNotEmpty
+                ? Image.network(user.avatarUrl!, fit: BoxFit.cover)
                 : Center(
                     child: Text(
                       name.characters.first.toUpperCase(),

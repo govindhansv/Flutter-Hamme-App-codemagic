@@ -77,81 +77,58 @@ final interactionControllerProvider =
 
 final Set<String> _deferredFinalizeInFlight = <String>{};
 final Set<String> _deferredFinalizeProcessed = <String>{};
-final Set<String> _deferredShareInFlight = <String>{};
-final Set<String> _deferredShareProcessed = <String>{};
 
-// Provider that listens for auth and deferred token to trigger finalize automatically
+// Reactions are created exclusively through the reveal-token -> finalize flow,
+// which the backend gates with a 60s expiry window. We deliberately do NOT
+// auto-send an interaction from a bare share code. Doing so produced a play card
+// even after the reveal link had expired (and double-fired on the success path):
+// when a token finalize failed, clearing the token re-triggered this provider and
+// fell through to the non-expiring share-code send. Opening a profile/share link
+// should let the user install/sign up, but must never create a reaction by itself.
 final deferredInteractionFinalizerProvider = Provider<void>((ref) {
   final authStatus = ref.watch(authStatusProvider);
   final onboardingComplete = ref.watch(onboardingCompletionProvider).value ?? false;
   final token = ref.watch(deferredInteractionTokenProvider);
-  final shareCode = ref.watch(deferredShareCodeProvider);
-  final interactionType = ref.watch(deferredInteractionTypeProvider);
 
-  if (authStatus == AuthStatus.authenticated && onboardingComplete) {
-    if (token != null) {
-      if (_deferredFinalizeInFlight.contains(token) ||
-          _deferredFinalizeProcessed.contains(token)) {
-        return;
-      }
-      _deferredFinalizeInFlight.add(token);
-      debugPrint('[DeferredInteraction] Auto-finalizing token: $token');
-      Future.microtask(() async {
-        try {
-          await ref.read(interactionControllerProvider.notifier).finalizeInteraction(token);
-          _deferredFinalizeProcessed.add(token);
-          ref.read(deferredInteractionTokenProvider.notifier).state = null;
-        } catch (e) {
-          debugPrint('[DeferredInteraction] Finalize failed: $e');
-          ref.read(deferredInteractionErrorProvider.notifier).state =
-              _friendlyDeferredError(e);
-          if (e is AppException &&
-              e.statusCode != null &&
-              e.statusCode! >= 400 &&
-              e.statusCode! < 500) {
-            ref.read(deferredInteractionTokenProvider.notifier).state = null;
-          }
-        } finally {
-          _deferredFinalizeInFlight.remove(token);
-        }
-      });
-    }
-
-    // Only use share-code flow when there is no reveal token.
-    // Deep links can include both token and code/type; token is authoritative.
-    if (token == null && shareCode != null && interactionType != null) {
-      final dedupeKey = '${shareCode.toLowerCase()}::${interactionType.name}';
-      if (_deferredShareInFlight.contains(dedupeKey) ||
-          _deferredShareProcessed.contains(dedupeKey)) {
-        return;
-      }
-      _deferredShareInFlight.add(dedupeKey);
-      debugPrint('[DeferredInteraction] Auto-sending shareCode: $shareCode type=${interactionType.name}');
-      Future.microtask(() async {
-        try {
-          await ref
-              .read(interactionControllerProvider.notifier)
-              .sendInteraction(shareCode: shareCode, type: interactionType);
-          _deferredShareProcessed.add(dedupeKey);
-          ref.read(deferredShareCodeProvider.notifier).state = null;
-          ref.read(deferredInteractionTypeProvider.notifier).state = null;
-        } catch (e) {
-          debugPrint('[DeferredInteraction] ShareCode send failed: $e');
-          ref.read(deferredInteractionErrorProvider.notifier).state =
-              _friendlyDeferredError(e);
-          if (e is AppException &&
-              e.statusCode != null &&
-              e.statusCode! >= 400 &&
-              e.statusCode! < 500) {
-            ref.read(deferredShareCodeProvider.notifier).state = null;
-            ref.read(deferredInteractionTypeProvider.notifier).state = null;
-          }
-        } finally {
-          _deferredShareInFlight.remove(dedupeKey);
-        }
-      });
-    }
+  if (authStatus != AuthStatus.authenticated || !onboardingComplete) {
+    return;
   }
+
+  if (token == null) {
+    return;
+  }
+
+  if (_deferredFinalizeInFlight.contains(token) ||
+      _deferredFinalizeProcessed.contains(token)) {
+    return;
+  }
+  _deferredFinalizeInFlight.add(token);
+  debugPrint('[DeferredInteraction] Auto-finalizing token: $token');
+  Future.microtask(() async {
+    try {
+      await ref.read(interactionControllerProvider.notifier).finalizeInteraction(token);
+      _deferredFinalizeProcessed.add(token);
+      ref.read(deferredInteractionTokenProvider.notifier).state = null;
+    } catch (e) {
+      debugPrint('[DeferredInteraction] Finalize failed: $e');
+      ref.read(deferredInteractionErrorProvider.notifier).state =
+          _friendlyDeferredError(e);
+      if (e is AppException &&
+          e.statusCode != null &&
+          e.statusCode! >= 400 &&
+          e.statusCode! < 500) {
+        // Terminal failure (expired / already used / self). Mark it processed so
+        // it is never retried, and clear all deferred deep-link state so no other
+        // path acts on this expired link.
+        _deferredFinalizeProcessed.add(token);
+        ref.read(deferredInteractionTokenProvider.notifier).state = null;
+        ref.read(deferredShareCodeProvider.notifier).state = null;
+        ref.read(deferredInteractionTypeProvider.notifier).state = null;
+      }
+    } finally {
+      _deferredFinalizeInFlight.remove(token);
+    }
+  });
 });
 
 String _friendlyDeferredError(Object error) {

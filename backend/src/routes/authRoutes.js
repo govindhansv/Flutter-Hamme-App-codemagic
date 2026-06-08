@@ -28,7 +28,7 @@ router.post(
     body('password').isLength({ min: 6, max: 64 }),
     body('instagramId').trim().notEmpty(),
     body('username').optional({ values: 'falsy' }).trim().toLowerCase().matches(/^[a-z0-9._]+$/),
-    body('profileImageUrl')
+    body('avatarUrl')
       .optional({ values: 'falsy' })
       .custom(isAllowedAvatarUrl),
   ],

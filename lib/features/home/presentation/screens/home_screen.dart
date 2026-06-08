@@ -34,7 +34,10 @@ class HomeScreen extends ConsumerWidget {
       body: SafeArea(
         child: Column(
           children: [
-            HammeTopBar(onLeftTap: () => context.push('/matches')),
+            HammeTopBar(
+              onLeftTap: () => context.push('/matches'),
+              onRightTap: () => context.push('/profile'),
+            ),
 
             Expanded(
               child: SingleChildScrollView(

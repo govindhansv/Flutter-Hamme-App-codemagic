@@ -46,5 +46,4 @@ const _$InteractionTypeEnumMap = {
   InteractionType.crush: 'crush',
   InteractionType.friend: 'friend',
   InteractionType.frenemy: 'frenemy',
-  InteractionType.ameny: 'ameny',
 };

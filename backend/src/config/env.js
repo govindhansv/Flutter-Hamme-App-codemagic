@@ -27,4 +27,5 @@ module.exports = {
   jwtRefreshTtl: process.env.JWT_REFRESH_TTL || '30d',
   enableSockets:
     process.env.ENABLE_SOCKETS === 'true' && !process.env.VERCEL,
+  adminApiKey: process.env.ADMIN_API_KEY || '',
 };

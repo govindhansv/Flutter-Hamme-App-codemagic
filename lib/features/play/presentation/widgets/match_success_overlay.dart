@@ -41,7 +41,6 @@ class MatchThemeConfig {
           choiceText: 'Friend',
         );
       case InteractionType.frenemy:
-      case InteractionType.ameny:
         return const MatchThemeConfig(
           bgGradient: [Color(0xFFA5A5D7), Color(0xFF676798)],
           solidBorder: Color(0xFF676798),
@@ -111,7 +110,7 @@ class _MatchSuccessOverlayState extends State<MatchSuccessOverlay> {
         ?? interaction.fromUserName?.trim()
         ?? interaction.fromUserUsername?.trim()
         ?? 'Someone';
-    final otherImageUrl = match?.matchedUser.profileImageUrl
+    final otherImageUrl = match?.matchedUser.avatarUrl
         ?? interaction.fromUserProfileImageUrl;
 
     final theme = MatchThemeConfig.fromType(interaction.type);
