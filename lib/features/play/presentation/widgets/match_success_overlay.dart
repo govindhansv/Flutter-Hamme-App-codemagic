@@ -139,7 +139,7 @@ class _MatchSuccessOverlayState extends State<MatchSuccessOverlay> {
                     width: 36,
                     height: 36,
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.6),
+                      color: Colors.white.withValues(alpha: 0.6),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
@@ -270,7 +270,7 @@ class _MatchSuccessOverlayState extends State<MatchSuccessOverlay> {
                           width: 100,
                           height: 48,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.4),
+                            color: Colors.white.withValues(alpha: 0.4),
                             borderRadius: BorderRadius.circular(24),
                           ),
                           child: Stack(

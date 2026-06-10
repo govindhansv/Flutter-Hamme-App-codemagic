@@ -185,9 +185,9 @@ Future<Uint8List> _captureStoryFromHiddenOverlay(
 
 class _SharePlayingScreenState extends ConsumerState<SharePlayingScreen>
     with WidgetsBindingObserver {
-  bool _didEnterBackground = false;
-  bool _shareLaunchFinished = false;
-  bool _didExitLoader = false;
+  final bool _didEnterBackground = false;
+  final bool _shareLaunchFinished = false;
+  final bool _didExitLoader = false;
 
   @override
   void initState() {

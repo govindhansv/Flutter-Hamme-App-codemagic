@@ -2,7 +2,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:hamme_app/features/inbox/domain/models/inbox_variation.dart';
 import 'package:hamme_app/utils/constants/fonts.dart';
-import 'package:hamme_app/utils/constants/image_strings.dart';
 
 /// Renders a 1080 × 1920 (9:16) story image that matches the reference
 /// design exactly. Used as the off-screen RepaintBoundary source before
