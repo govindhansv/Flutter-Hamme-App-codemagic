@@ -30,7 +30,9 @@ final matchesProvider = FutureProvider<List<MatchRecord>>((ref) async {
   if (session == null) {
     throw const AppException('You need to sign in to view matches.');
   }
-  return ref.watch(interactionRepositoryProvider).getMatches();
+  final allMatches = await ref.watch(interactionRepositoryProvider).getMatches();
+  final cutoff = DateTime.now().subtract(const Duration(hours: 24));
+  return allMatches.where((m) => m.createdAt.isAfter(cutoff)).toList();
 });
 
 final receivedInteractionsProvider = FutureProvider<List<InteractionRecord>>((ref) async {

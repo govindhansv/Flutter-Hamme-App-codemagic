@@ -10,6 +10,8 @@ import 'package:go_router/go_router.dart';
 import 'package:hamme_app/models/interaction_record.dart';
 import 'package:hamme_app/models/interaction_type.dart';
 import 'package:hamme_app/models/interaction_result.dart';
+import 'package:hamme_app/providers/auth_providers.dart';
+import 'package:hamme_app/providers/billing_providers.dart';
 import 'package:hamme_app/providers/interaction_providers.dart';
 import 'package:hamme_app/providers/onboarding_providers.dart';
 import 'package:hamme_app/utils/constants/colors.dart';
@@ -33,6 +35,8 @@ class _PlayScreenState extends ConsumerState<PlayScreen>
     with WidgetsBindingObserver {
   Timer? _refreshTimer;
   InteractionResult? _lastResult;
+  InteractionRecord? _rewoundItem;
+  InteractionRecord? _lastVotedItem;
 
   void _refreshPlayData() {
     ref.invalidate(receivedInteractionsProvider);
@@ -41,6 +45,14 @@ class _PlayScreenState extends ConsumerState<PlayScreen>
 
   void _onDismiss() {
     setState(() {
+      _lastResult = null;
+    });
+  }
+
+  void _triggerRewind() {
+    if (_lastVotedItem == null) return;
+    setState(() {
+      _rewoundItem = _lastVotedItem;
       _lastResult = null;
     });
   }
@@ -85,6 +97,7 @@ class _PlayScreenState extends ConsumerState<PlayScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _refreshPlayData();
+      unawaited(ref.read(authControllerProvider.notifier).refreshUser());
     }
   }
 
@@ -105,18 +118,21 @@ class _PlayScreenState extends ConsumerState<PlayScreen>
                       result: _lastResult!,
                       remainingCount: (pending.value?.length ?? 0),
                       onSeeNext: _onDismiss,
+                      onRewind: _triggerRewind,
                     )
                   : pending.when(
                       data: (items) {
-                        if (items.isEmpty) return const _CompletedQueueView();
-                        final current = items.first;
+                        final effectiveItem = _rewoundItem ?? (items.isEmpty ? null : items.first);
+                        if (effectiveItem == null) return const _CompletedQueueView();
                         return _PlayQueue(
-                          item: current,
+                          item: effectiveItem,
                           remainingCount: items.length,
                           isSubmitting: controller.isLoading,
                           onSelect: (type) async {
-                            final targetUserId = current.fromUser;
+                            final targetUserId = effectiveItem.fromUser;
                             if (targetUserId == null || targetUserId.isEmpty) return;
+                            _lastVotedItem = effectiveItem;
+                            setState(() => _rewoundItem = null);
                             try {
                               final result = await ref
                                   .read(interactionControllerProvider.notifier)
@@ -126,28 +142,25 @@ class _PlayScreenState extends ConsumerState<PlayScreen>
                                   );
                               if (!mounted) return;
 
-                              // Merge with current card data so pfp/names are preserved
                               final mergedResult = result.copyWith(
                                 interaction: result.interaction.copyWith(
-                                  fromUserName: result.interaction.fromUserName ?? current.fromUserName,
-                                  fromUserUsername: result.interaction.fromUserUsername ?? current.fromUserUsername,
-                                  fromUserProfileImageUrl: result.interaction.fromUserProfileImageUrl ?? current.fromUserProfileImageUrl,
-                                  fromUserInstagramId: result.interaction.fromUserInstagramId ?? current.fromUserInstagramId,
-                                  fromUserSnapchatId: result.interaction.fromUserSnapchatId ?? current.fromUserSnapchatId,
+                                  fromUserName: result.interaction.fromUserName ?? effectiveItem.fromUserName,
+                                  fromUserUsername: result.interaction.fromUserUsername ?? effectiveItem.fromUserUsername,
+                                  fromUserProfileImageUrl: result.interaction.fromUserProfileImageUrl ?? effectiveItem.fromUserProfileImageUrl,
+                                  fromUserInstagramId: result.interaction.fromUserInstagramId ?? effectiveItem.fromUserInstagramId,
+                                  fromUserSnapchatId: result.interaction.fromUserSnapchatId ?? effectiveItem.fromUserSnapchatId,
                                 ),
                               );
 
                               if (mergedResult.matched) {
-                                // Celebration takes over the whole screen
-                                // (above the persistent bottom nav).
                                 await _showMatchOverlay(mergedResult);
                                 if (!mounted) return;
                                 _refreshPlayData();
                               } else {
-                                // "Not a match" is shown inline within the tab.
                                 setState(() => _lastResult = mergedResult);
                               }
-                            } catch (error) {                              if (!mounted) return;
+                            } catch (error) {
+                              if (!mounted) return;
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: Text('Could not save response: $error'),
@@ -682,11 +695,13 @@ class _NotAMatchView extends ConsumerStatefulWidget {
     required this.result,
     required this.remainingCount,
     required this.onSeeNext,
+    required this.onRewind,
   });
 
   final InteractionResult result;
   final int remainingCount;
   final VoidCallback onSeeNext;
+  final VoidCallback onRewind;
 
   @override
   ConsumerState<_NotAMatchView> createState() => _NotAMatchViewState();
@@ -859,7 +874,13 @@ class _NotAMatchViewState extends ConsumerState<_NotAMatchView>
               color: Colors.transparent,
               child: InkWell(
                 borderRadius: BorderRadius.circular(28),
-                onTap: () => context.push('/pro'), // Pro feature
+                onTap: () {
+                  if (ref.read(isProProvider)) {
+                    widget.onRewind();
+                  } else {
+                    context.push('/pro');
+                  }
+                },
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 22),
                   child: Row(

@@ -99,6 +99,17 @@ class AuthController extends AsyncNotifier<AuthSession?> {
     );
   }
 
+  Future<void> refreshUser() async {
+    final current = state.value;
+    if (current == null) return;
+    try {
+      final user = await ref.read(authRemoteDataSourceProvider).getCurrentUser();
+      state = AsyncData(current.copyWith(user: user));
+    } catch (e) {
+      debugPrint('[Auth] refreshUser failed: $e');
+    }
+  }
+
   Future<void> guestRegister({
     required int age,
     required String displayName,

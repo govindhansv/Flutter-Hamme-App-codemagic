@@ -183,19 +183,13 @@ Future<Uint8List> _captureStoryFromHiddenOverlay(
   }
 }
 
-class _SharePlayingScreenState extends ConsumerState<SharePlayingScreen>
-    with WidgetsBindingObserver {
-  final bool _didEnterBackground = false;
-  final bool _shareLaunchFinished = false;
-  final bool _didExitLoader = false;
-
+class _SharePlayingScreenState extends ConsumerState<SharePlayingScreen> {
   @override
   void initState() {
     super.initState();
-    // Start sharing automatically. Do not navigate away immediately because
-    // it can interrupt share intents on some Android devices.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      SharePlayingScreen.shareStory(context, ref);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await SharePlayingScreen.shareStory(context, ref, platform: widget.platform);
+      if (mounted) context.go('/home');
     });
   }
 
