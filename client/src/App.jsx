@@ -187,6 +187,7 @@ function App() {
           <QuestionScreen
             onAnswer={handleAnswer}
             profileImage={profileImage}
+            profileName={profileName}
             submittingType={submittingType}
             submitError={submitError}
           />
@@ -207,7 +208,7 @@ function App() {
   );
 }
 
-function QuestionScreen({ onAnswer, profileImage, submittingType, submitError }) {
+function QuestionScreen({ onAnswer, profileImage, profileName, submittingType, submitError }) {
   return (
     <>
       <div className="flex w-full flex-col items-center px-6">
@@ -219,7 +220,9 @@ function QuestionScreen({ onAnswer, profileImage, submittingType, submitError })
           />
         </div>
 
-        <div className="-mt-[6px] flex h-[37px] w-full items-center justify-center rounded-xl bg-white px-4 text-[19px] font-black tracking-[0.01em] text-black shadow-[0_7px_0_rgba(0,0,0,0.18)]">
+        <p className="mt-2 text-[16px] font-extrabold text-white">{profileName}</p>
+
+        <div className="mt-[6px] flex h-[37px] w-full items-center justify-center rounded-xl bg-white px-4 text-[19px] font-black tracking-[0.01em] text-black shadow-[0_7px_0_rgba(0,0,0,0.18)]">
           What do you think of me?
         </div>
 
