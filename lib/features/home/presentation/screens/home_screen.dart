@@ -5,14 +5,12 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hamme_app/core/constants/app_constants.dart';
 import 'package:hamme_app/providers/auth_providers.dart';
-import 'package:hamme_app/providers/interaction_providers.dart';
 import 'package:hamme_app/providers/onboarding_providers.dart';
 import 'package:hamme_app/utils/constants/colors.dart';
 import 'package:hamme_app/utils/constants/fonts.dart';
 import 'package:hamme_app/utils/constants/text_strings.dart';
 
 import '../../../../core/widgets/gradient_button.dart';
-import '../../../shared/presentation/widgets/hamme_bottom_nav_bar.dart';
 import '../../../shared/presentation/widgets/hamme_top_bar.dart';
 import '../widgets/home_profile_card.dart';
 import '../widgets/home_step_card.dart';
@@ -26,8 +24,6 @@ class HomeScreen extends ConsumerWidget {
     final session = ref.watch(authControllerProvider).value;
     final shareCode = session?.user.shareCode;
     final shareLink = AppConstants.buildUserShareLink(shareCode);
-    final pendingPlay = ref.watch(pendingPlayInteractionsProvider);
-    final playCount = pendingPlay.maybeWhen(data: (items) => items.length, orElse: () => null);
 
     return Scaffold(
       backgroundColor: TColors.white,
@@ -139,85 +135,74 @@ class HomeScreen extends ConsumerWidget {
 
                     const SizedBox(height: 16),
 
-                    SizedBox(
-                      width: 250,
-                      child: OutlinedButton(
-                        onPressed: () async {
-                          await ref
-                              .read(onboardingCompletionProvider.notifier)
-                              .reset();
-                          if (!context.mounted) return;
-                          context.go('/onboarding/dob');
-                        },
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(
-                            color: TColors.hammePrimaryDark,
-                            width: 2,
-                          ),
-                          foregroundColor: TColors.hammePrimaryDark,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(28),
-                          ),
-                        ),
-                        child: const Text(
-                          'Go to onboarding',
-                          style: TextStyle(
-                            fontFamily: TFonts.nunito,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
-                    ),
+                    // SizedBox(
+                    //   width: 250,
+                    //   child: OutlinedButton(
+                    //     onPressed: () async {
+                    //       await ref
+                    //           .read(onboardingCompletionProvider.notifier)
+                    //           .reset();
+                    //       if (!context.mounted) return;
+                    //       context.go('/onboarding/dob');
+                    //     },
+                    //     style: OutlinedButton.styleFrom(
+                    //       side: const BorderSide(
+                    //         color: TColors.hammePrimaryDark,
+                    //         width: 2,
+                    //       ),
+                    //       foregroundColor: TColors.hammePrimaryDark,
+                    //       padding: const EdgeInsets.symmetric(vertical: 14),
+                    //       shape: RoundedRectangleBorder(
+                    //         borderRadius: BorderRadius.circular(28),
+                    //       ),
+                    //     ),
+                    //     child: const Text(
+                    //       'Go to onboarding',
+                    //       style: TextStyle(
+                    //         fontFamily: TFonts.nunito,
+                    //         fontWeight: FontWeight.w700,
+                    //         fontSize: 16,
+                    //       ),
+                    //     ),
+                    //   ),
+                    // ),
 
-                    const SizedBox(height: 12),
+                    // const SizedBox(height: 12),
 
-                    SizedBox(
-                      width: 250,
-                      child: OutlinedButton(
-                        onPressed: () async {
-                          await ref.read(authControllerProvider.notifier).logout();
-                          if (!context.mounted) return;
-                          context.go('/splash');
-                        },
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Colors.red, width: 2),
-                          foregroundColor: Colors.red,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(28),
-                          ),
-                        ),
-                        child: const Text(
-                          'Logout (Reset Tokens)',
-                          style: TextStyle(
-                            fontFamily: TFonts.nunito,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
-                    ),
+                    // SizedBox(
+                    //   width: 250,
+                    //   child: OutlinedButton(
+                    //     onPressed: () async {
+                    //       await ref.read(authControllerProvider.notifier).logout();
+                    //       if (!context.mounted) return;
+                    //       context.go('/splash');
+                    //     },
+                    //     style: OutlinedButton.styleFrom(
+                    //       side: const BorderSide(color: Colors.red, width: 2),
+                    //       foregroundColor: Colors.red,
+                    //       padding: const EdgeInsets.symmetric(vertical: 14),
+                    //       shape: RoundedRectangleBorder(
+                    //         borderRadius: BorderRadius.circular(28),
+                    //       ),
+                    //     ),
+                    //     child: const Text(
+                    //       'Logout (Reset Tokens)',
+                    //       style: TextStyle(
+                    //         fontFamily: TFonts.nunito,
+                    //         fontWeight: FontWeight.w700,
+                    //         fontSize: 16,
+                    //       ),
+                    //     ),
+                    //   ),
+                    // ),
 
-                    const SizedBox(height: 32),
+                    // const SizedBox(height: 32),
                   ],
                 ),
               ),
             ),
           ],
         ),
-      ),
-      bottomNavigationBar: HammeBottomNavBar(
-        currentIndex: 0,
-        playBadgeCount: playCount,
-        onTap: (index) {
-          if (index == 1) {
-            context.go('/play');
-          } else if (index == 2) {
-            context.go('/inbox');
-          }
-        },
       ),
     );
   }

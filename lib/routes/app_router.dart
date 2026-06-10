@@ -15,13 +15,17 @@ import '../features/onboarding/presentation/screens/pro_screen.dart';
 import '../features/onboarding/presentation/screens/social_media_screen.dart';
 import '../features/onboarding/presentation/screens/splash_screen.dart';
 import '../features/profile/presentation/screens/profile_screen.dart';
+import '../features/shared/presentation/screens/main_shell.dart';
 import '../providers/auth_providers.dart';
+
+final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authControllerProvider);
   final authStatus = ref.watch(authStatusProvider);
 
   return GoRouter(
+    navigatorKey: _rootNavigatorKey,
     initialLocation: '/splash',
     overridePlatformDefaultLocation: true,
     routes: [
@@ -42,11 +46,29 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/pro',
         builder: (_, _) => const ProScreen(isOnboarding: false),
       ),
-      GoRoute(path: '/home', builder: (_, _) => const HomeScreen()),
       GoRoute(path: '/profile', builder: (_, _) => const ProfileScreen()),
       GoRoute(path: '/matches', builder: (_, _) => const MatchesScreen()),
-      GoRoute(path: '/inbox', builder: (_, _) => const InboxScreen()),
-      GoRoute(path: '/play', builder: (_, _) => const PlayScreen()),
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigationShell) =>
+            MainShell(navigationShell: navigationShell),
+        branches: [
+          StatefulShellBranch(
+            routes: [
+              GoRoute(path: '/home', builder: (_, _) => const HomeScreen()),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(path: '/play', builder: (_, _) => const PlayScreen()),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(path: '/inbox', builder: (_, _) => const InboxScreen()),
+            ],
+          ),
+        ],
+      ),
       GoRoute(path: '/share', builder: (_, _) => const SharePreviewScreen()),
       GoRoute(
         path: '/share/playing',

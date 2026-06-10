@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:appinio_social_share/appinio_social_share.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
@@ -18,7 +17,6 @@ import 'package:hamme_app/features/inbox/domain/models/inbox_variation.dart';
 import 'package:hamme_app/utils/constants/colors.dart';
 import 'package:hamme_app/utils/constants/fonts.dart';
 import 'package:hamme_app/utils/constants/image_strings.dart';
-import 'package:hamme_app/features/shared/presentation/widgets/hamme_bottom_nav_bar.dart';
 import 'package:hamme_app/features/shared/presentation/widgets/hamme_top_bar.dart';
 import '../widgets/inbox_share_export_widget.dart';
 import '../widgets/inbox_reaction_card.dart';
@@ -241,12 +239,6 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final pendingPlay = ref.watch(pendingPlayInteractionsProvider);
-    final playCount = pendingPlay.maybeWhen(
-      data: (items) => items.length,
-      orElse: () => null,
-    );
-
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -433,17 +425,6 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
             ),
           ],
         ),
-      ),
-      bottomNavigationBar: HammeBottomNavBar(
-        currentIndex: 2,
-        playBadgeCount: playCount,
-        onTap: (index) {
-          if (index == 0) {
-            context.go('/home');
-          } else if (index == 1) {
-            context.go('/play');
-          }
-        },
       ),
     );
   }

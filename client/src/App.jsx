@@ -158,8 +158,8 @@ function App() {
 
   if (profileError || !profile) {
     return (
-      <main className="min-h-screen bg-[linear-gradient(180deg,#9b63f7_0%,#8f48fa_48%,#7c35ff_100%)] text-white">
-        <section className="mx-auto flex min-h-screen w-full max-w-[360px] items-center justify-center px-4 text-center">
+      <main className="min-h-screen bg-[linear-gradient(180deg,#9b63f7_0%,#8f48fa_48%,#7c35ff_100%)] text-white" >
+        <section className="mx-auto flex min-h-screen w-full max-w-[360px] items-center justify-center px-4 text-center" >
           <p className="text-lg font-bold">{profileError || 'Profile unavailable.'}</p>
         </section>
       </main>
@@ -210,7 +210,7 @@ function App() {
 function QuestionScreen({ onAnswer, profileImage, submittingType, submitError }) {
   return (
     <>
-      <div className="w-full px-6">
+      <div className="flex w-full flex-col items-center px-6">
         <div className="relative z-10 h-[98px] w-[98px] overflow-hidden rounded-full border-[5px] border-white bg-[#d8b09f] shadow-[0_7px_14px_rgba(0,0,0,0.22)]">
           <img
             src={profileImage}
@@ -367,13 +367,13 @@ function RevealScreen({
         <span className="text-[27px] font-light">→</span>
       </button>
 
-      <button
+      {/* <button
         onClick={handleCopyDeepLink}
         disabled={isExpired || !pendingToken}
         className="mt-[12px] flex h-[50px] w-full items-center justify-center rounded-[22px] bg-white/15 text-[16px] font-extrabold text-white disabled:opacity-45"
       >
         Copy Deeplink
-      </button>
+      </button> */}
       {copyStatus ? (
         <p className="mt-2 text-[12px] font-bold text-white/75">{copyStatus}</p>
       ) : null}

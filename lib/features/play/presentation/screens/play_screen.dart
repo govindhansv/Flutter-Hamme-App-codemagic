@@ -17,7 +17,6 @@ import 'package:hamme_app/utils/constants/fonts.dart';
 import 'package:hamme_app/utils/constants/image_strings.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-import '../../../shared/presentation/widgets/hamme_bottom_nav_bar.dart';
 import '../../../shared/presentation/widgets/hamme_top_bar.dart';
 import '../widgets/play_empty_state.dart';
 import '../widgets/match_share_export_widget.dart';
@@ -44,6 +43,22 @@ class _PlayScreenState extends ConsumerState<PlayScreen>
     setState(() {
       _lastResult = null;
     });
+  }
+
+  /// Shows the full-screen match celebration on the root navigator so it
+  /// covers the persistent bottom navigation bar.
+  Future<void> _showMatchOverlay(InteractionResult result) async {
+    final myImageUrl = ref.read(onboardingDraftProvider).value?.profileImageUrl;
+    await Navigator.of(context, rootNavigator: true).push(
+      PageRouteBuilder(
+        opaque: true,
+        pageBuilder: (overlayContext, _, __) => MatchSuccessOverlay(
+          result: result,
+          currentUserImageUrl: myImageUrl,
+          onDismiss: () => Navigator.of(overlayContext).pop(),
+        ),
+      ),
+    );
   }
 
   @override
@@ -77,16 +92,6 @@ class _PlayScreenState extends ConsumerState<PlayScreen>
   Widget build(BuildContext context) {
     final pending = ref.watch(pendingPlayInteractionsProvider);
     final controller = ref.watch(interactionControllerProvider);
-
-    // Full-screen match overlay – rendered on top of everything
-    if (_lastResult != null && _lastResult!.matched) {
-      final myImageUrl = ref.watch(onboardingDraftProvider).value?.profileImageUrl;
-      return MatchSuccessOverlay(
-        result: _lastResult!,
-        currentUserImageUrl: myImageUrl,
-        onDismiss: _onDismiss,
-      );
-    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F7F7),
@@ -131,9 +136,18 @@ class _PlayScreenState extends ConsumerState<PlayScreen>
                                   fromUserSnapchatId: result.interaction.fromUserSnapchatId ?? current.fromUserSnapchatId,
                                 ),
                               );
-                              setState(() => _lastResult = mergedResult);
-                            } catch (error) {
-                              if (!mounted) return;
+
+                              if (mergedResult.matched) {
+                                // Celebration takes over the whole screen
+                                // (above the persistent bottom nav).
+                                await _showMatchOverlay(mergedResult);
+                                if (!mounted) return;
+                                _refreshPlayData();
+                              } else {
+                                // "Not a match" is shown inline within the tab.
+                                setState(() => _lastResult = mergedResult);
+                              }
+                            } catch (error) {                              if (!mounted) return;
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: Text('Could not save response: $error'),
@@ -157,17 +171,6 @@ class _PlayScreenState extends ConsumerState<PlayScreen>
             ),
           ],
         ),
-      ),
-      bottomNavigationBar: HammeBottomNavBar(
-        currentIndex: 1,
-        playBadgeCount: pending.maybeWhen(
-          data: (items) => items.length,
-          orElse: () => null,
-        ),
-        onTap: (index) {
-          if (index == 0) context.go('/home');
-          else if (index == 2) context.go('/inbox');
-        },
       ),
     );
   }
