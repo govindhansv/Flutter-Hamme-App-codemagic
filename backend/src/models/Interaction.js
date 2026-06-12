@@ -46,5 +46,6 @@ interactionSchema.index(
 );
 interactionSchema.index({ toUser: 1, type: 1, createdAt: -1 });
 interactionSchema.index({ fromUser: 1, createdAt: -1 });
+interactionSchema.index({ 'metadata.sessionId': 1, toUser: 1, createdAt: -1 }, { sparse: true });
 
 module.exports = mongoose.model('Interaction', interactionSchema);

@@ -152,14 +152,14 @@ async function createAnonymousResponse({
   }
 
   if (sessionId) {
-    const duplicate = await PendingInteraction.findOne({
-      targetUserId: targetUser.id,
-      sessionId,
-      type: normalizedType,
-      status: 'pending',
-      createdAt: { $gte: new Date(now - PENDING_TTL_MS) },
+    // Check anonymous Interactions in the last 24 h (survives the 60 s PendingInteraction TTL).
+    const existingInteraction = await Interaction.findOne({
+      toUser: targetUser.id,
+      fromUser: null,
+      'metadata.sessionId': sessionId,
+      createdAt: { $gte: new Date(now - 24 * 60 * 60 * 1000) },
     });
-    if (duplicate) {
+    if (existingInteraction) {
       throw new ApiError(409, 'This interaction has already been sent.');
     }
   }

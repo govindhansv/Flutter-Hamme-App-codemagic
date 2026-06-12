@@ -6,7 +6,28 @@ const playerColors = ['#ff4f97', '#35d678', '#42b6ff', '#ffd230', '#ff5c5c'];
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000/api/v1';
 const flutterWebBaseUrl = import.meta.env.VITE_FLUTTER_WEB_URL ?? '';
 const sessionStorageKey = 'hamme_web_session_id';
-const pendingTtlMs = 60 * 1000;
+const votedCodesKey = 'hamme_voted_codes';
+const pendingTtlSeconds = Math.max(30, Number(import.meta.env.VITE_PENDING_TTL_SECONDS) || 60);
+const pendingTtlMs = pendingTtlSeconds * 1000;
+
+function hasAlreadyVoted(code) {
+  if (!code) return false;
+  try {
+    const voted = JSON.parse(window.localStorage.getItem(votedCodesKey) || '{}');
+    return Boolean(voted[code]);
+  } catch {
+    return false;
+  }
+}
+
+function markAsVoted(code) {
+  if (!code) return;
+  try {
+    const voted = JSON.parse(window.localStorage.getItem(votedCodesKey) || '{}');
+    voted[code] = Date.now();
+    window.localStorage.setItem(votedCodesKey, JSON.stringify(voted));
+  } catch {}
+}
 
 function readShareCodeFromPath() {
   const parts = window.location.pathname.split('/').filter(Boolean);
@@ -25,8 +46,10 @@ function generateSessionId() {
 }
 
 function App() {
+  const shareCode = readShareCodeFromPath();
   const [isSent, setIsSent] = useState(false);
-  const [secondsLeft, setSecondsLeft] = useState(60);
+  const [alreadyVoted] = useState(() => hasAlreadyVoted(shareCode));
+  const [secondsLeft, setSecondsLeft] = useState(pendingTtlSeconds);
   const [expiresAt, setExpiresAt] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
@@ -36,7 +59,6 @@ function App() {
   const [submitError, setSubmitError] = useState('');
   const [interactionResult, setInteractionResult] = useState(null);
   const isExpired = secondsLeft === 0;
-  const shareCode = readShareCodeFromPath();
 
   useEffect(() => {
     if (!isSent || !expiresAt) {
@@ -79,7 +101,7 @@ function App() {
         } else {
           const fallbackExpires = new Date(Date.now() + pendingTtlMs);
           setExpiresAt(fallbackExpires.toISOString());
-          setSecondsLeft(Math.ceil(pendingTtlMs / 1000));
+          setSecondsLeft(pendingTtlSeconds);
         }
         setProfileError('');
         console.info('[Web] link opened', { shareCode });
@@ -128,6 +150,7 @@ function App() {
       const data = await response.json();
       setInteractionResult(data); // contains pendingToken
       setIsSent(true);
+      markAsVoted(shareCode);
       if (data.expiresAt) {
         const expires = new Date(data.expiresAt);
         setExpiresAt(expires.toISOString());
@@ -136,7 +159,7 @@ function App() {
       } else {
         const fallbackExpires = new Date(now + pendingTtlMs);
         setExpiresAt(fallbackExpires.toISOString());
-        setSecondsLeft(Math.ceil(pendingTtlMs / 1000));
+        setSecondsLeft(pendingTtlSeconds);
       }
       console.info('[Web] option selected', { shareCode, type });
     } catch {
@@ -171,7 +194,7 @@ function App() {
 
   return (
     <main className="min-h-screen overflow-hidden bg-[linear-gradient(180deg,#9b63f7_0%,#8f48fa_48%,#7c35ff_100%)] text-white">
-      <section className={`mx-auto flex min-h-screen w-full max-w-[360px] flex-col items-center px-4 pb-8 text-center ${isSent ? 'pt-[82px]' : 'pt-[132px]'}`}>
+      <section className={`mx-auto flex min-h-screen w-full max-w-[360px] flex-col items-center px-4 pb-8 text-center ${isSent || alreadyVoted ? 'pt-[82px]' : 'pt-[132px]'}`}>
         {isSent ? (
           <RevealScreen
             secondsLeft={secondsLeft}
@@ -183,6 +206,8 @@ function App() {
             shareCode={shareCode}
             selectedType={selectedType}
           />
+        ) : alreadyVoted ? (
+          <AlreadyVotedScreen profileName={profileName} profileImage={profileImage} />
         ) : (
           <QuestionScreen
             onAnswer={handleAnswer}
@@ -315,9 +340,10 @@ function RevealScreen({
     if (shareCode) referrerParams.set('hamme_code', shareCode);
     if (selectedType) referrerParams.set('hamme_type', selectedType);
 
-    const playStoreUrl = `market://details?id=com.hamme.app&referrer=${encodeURIComponent(referrerParams.toString())}`;
-    const appStoreUrl = 'https://apps.apple.com/app/hamme-play-games/id123456789';
-    const fallbackUrl = buildFlutterWebFallbackUrl();
+    // Use the https Play Store URL — works in all Android browsers and still
+    // passes the referrer through to the app after install.
+    const playStoreUrl = `https://play.google.com/store/apps/details?id=com.hamme.app&referrer=${encodeURIComponent(referrerParams.toString())}`;
+    const appStoreUrl = import.meta.env.VITE_APP_STORE_URL ?? '';
 
     window.location.href = deepLink;
 
@@ -328,11 +354,10 @@ function RevealScreen({
       if (document.visibilityState === 'visible') {
         if (isAndroid) {
           window.location.href = playStoreUrl;
-        } else if (isIOS) {
+        } else if (isIOS && appStoreUrl) {
           window.location.href = appStoreUrl;
-        } else if (fallbackUrl) {
-          window.location.href = fallbackUrl;
         }
+        // Desktop users: no redirect (no store available)
       }
     }, 2500);
   };
@@ -366,17 +391,18 @@ function RevealScreen({
         <div className="h-[3px] overflow-hidden rounded-full bg-white/35">
           <div
             className={`h-full rounded-full ${secondsLeft <= 20 ? 'bg-[#ff4545]' : 'bg-white'}`}
-            style={{ width: `${(secondsLeft / 60) * 100}%` }}
+            style={{ width: `${(secondsLeft / pendingTtlSeconds) * 100}%` }}
           />
         </div>
       </div>
 
       <button
         onClick={handleReveal}
-        className="mt-[12px] flex h-[61px] w-full items-center justify-center rounded-[27px] bg-white px-8 text-[20px] font-black text-[#c000df] shadow-[0_7px_0_rgba(0,0,0,0.10)] transition active:translate-y-1"
+        disabled={isExpired}
+        className="mt-[12px] flex h-[61px] w-full items-center justify-center rounded-[27px] bg-white px-8 text-[20px] font-black text-[#c000df] shadow-[0_7px_0_rgba(0,0,0,0.10)] transition active:translate-y-1 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none disabled:active:translate-y-0"
       >
-        <span className="flex-1">👀 Reveal</span>
-        <span className="text-[27px] font-light">→</span>
+        <span className="flex-1">{isExpired ? '⏰ Link Expired' : '👀 Reveal'}</span>
+        {!isExpired && <span className="text-[27px] font-light">→</span>}
       </button>
 
       {/* <button
@@ -390,14 +416,7 @@ function RevealScreen({
         <p className="mt-2 text-[12px] font-bold text-white/75">{copyStatus}</p>
       ) : null}
 
-      {flutterWebBaseUrl ? (
-        <a
-          href={buildFlutterWebFallbackUrl()}
-          className="mt-[12px] flex h-[50px] w-full items-center justify-center rounded-[22px] bg-white/15 text-[16px] font-extrabold text-white"
-        >
-          Continue In Web App
-        </a>
-      ) : null}
+      {/* No web fallback — mobile users go to the store, desktop gets no redirect */}
     </div>
   );
 }
@@ -425,6 +444,26 @@ function FriendsPlaying({ className }) {
 
         <p className="mt-[8px] text-[17px] font-extrabold tracking-[0.01em]">☝️ 6 friends playing now ☝️</p>
     </>
+  );
+}
+
+function AlreadyVotedScreen({ profileName, profileImage }) {
+  return (
+    <div className="w-full">
+      <div className="mx-auto flex h-[25px] w-[96px] items-center justify-center rounded-full border border-white/80 bg-white/10 text-[18px] font-extrabold">
+        <span className="mr-[7px] flex h-[19px] w-[19px] items-center justify-center rounded-full bg-white text-[12px] text-[#9b55f7]">✓</span>
+        Sent!
+      </div>
+      <div className="mt-[40px] flex flex-col items-center gap-3">
+        <div className="relative z-10 h-[80px] w-[80px] overflow-hidden rounded-full border-[4px] border-white bg-[#d8b09f] shadow-[0_7px_14px_rgba(0,0,0,0.22)]">
+          <img src={profileImage} alt="Profile" className="h-full w-full object-cover" />
+        </div>
+        <h2 className="text-[24px] font-black leading-tight">You already voted!</h2>
+        <p className="text-[15px] font-medium text-white/70 max-w-[260px]">
+          You already sent your reaction to <strong>{profileName}</strong>. Only one vote per person is allowed.
+        </p>
+      </div>
+    </div>
   );
 }
 
