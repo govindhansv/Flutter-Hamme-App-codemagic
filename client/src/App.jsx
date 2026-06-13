@@ -45,6 +45,14 @@ function generateSessionId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function buildDeepLink({ shareCode, type, token }) {
+  const params = new URLSearchParams();
+  if (shareCode) params.set('code', shareCode);
+  if (type) params.set('type', type);
+  if (token) params.set('token', token);
+  return `hamme://open?${params.toString()}`;
+}
+
 function App() {
   const shareCode = readShareCodeFromPath();
   const [isSent, setIsSent] = useState(false);
@@ -72,6 +80,24 @@ function App() {
 
     return () => clearInterval(timer);
   }, [isSent, expiresAt]);
+
+  // If the user already has the app installed, try opening it directly as
+  // soon as the response is sent. If the app isn't installed, this is a
+  // no-op and the user just stays on the reveal screen below.
+  useEffect(() => {
+    if (!isSent || !interactionResult) {
+      return;
+    }
+
+    const deepLink = buildDeepLink({
+      shareCode,
+      type: selectedType,
+      token: interactionResult.pendingToken,
+    });
+
+    window.location.href = deepLink;
+    console.info('[Web] auto app-open attempted', { deepLink });
+  }, [isSent, interactionResult, shareCode, selectedType]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -282,14 +308,6 @@ function RevealScreen({
 }) {
   const [copyStatus, setCopyStatus] = useState('');
 
-  const buildDeepLink = () => {
-    const params = new URLSearchParams();
-    if (shareCode) params.set('code', shareCode);
-    if (selectedType) params.set('type', selectedType);
-    if (pendingToken) params.set('token', pendingToken);
-    return `hamme://open?${params.toString()}`;
-  };
-
   const buildFlutterWebFallbackUrl = () => {
     if (!flutterWebBaseUrl) {
       return '';
@@ -300,7 +318,7 @@ function RevealScreen({
   };
 
   const handleCopyDeepLink = async () => {
-    const deepLink = buildDeepLink();
+    const deepLink = buildDeepLink({ shareCode, type: selectedType, token: pendingToken });
     try {
       await navigator.clipboard.writeText(deepLink);
     } catch {
@@ -333,7 +351,7 @@ function RevealScreen({
     const isAndroid = /android/i.test(userAgent);
     const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream;
 
-    const deepLink = buildDeepLink();
+    const deepLink = buildDeepLink({ shareCode, type: selectedType, token: pendingToken });
 
     const referrerParams = new URLSearchParams();
     if (pendingToken) referrerParams.set('hamme_token', pendingToken);
