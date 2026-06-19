@@ -121,6 +121,11 @@ class BillingController extends Notifier<BillingState> {
       if (serverPro && !state.isPro) {
         state = state.copyWith(isPro: true);
         unawaited(_grantEntitlement());
+      } else if (!serverPro && state.isPro) {
+        // Server says free — revoke the local entitlement so the cache doesn't
+        // keep the user in Pro after an admin downgrade or subscription expiry.
+        state = state.copyWith(isPro: false);
+        unawaited(_revokeEntitlement());
       }
     });
 
@@ -135,11 +140,14 @@ class BillingController extends Notifier<BillingState> {
     final prefs = await SharedPreferences.getInstance();
     final savedEntitlement = prefs.getBool(_entitlementKey) ?? false;
 
-    // The server is the source of truth; OR it with any locally cached value.
-    final sessionPro = ref.read(authControllerProvider).value?.user.isPro ?? false;
-    final entitlement = savedEntitlement || sessionPro;
-    if (sessionPro && !savedEntitlement) {
+    // Server is the source of truth when a session is available.
+    final sessionPro = ref.read(authControllerProvider).value?.user.isPro;
+    final entitlement = sessionPro ?? savedEntitlement;
+    if (sessionPro == true && !savedEntitlement) {
       await prefs.setBool(_entitlementKey, true);
+    } else if (sessionPro == false && savedEntitlement) {
+      // Server explicitly says free — clear stale cached entitlement.
+      await prefs.setBool(_entitlementKey, false);
     }
 
     bool available = false;
@@ -312,5 +320,10 @@ class BillingController extends Notifier<BillingState> {
   Future<void> _grantEntitlement() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_entitlementKey, true);
+  }
+
+  Future<void> _revokeEntitlement() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_entitlementKey, false);
   }
 }
