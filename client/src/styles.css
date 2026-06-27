@@ -1,12 +1,18 @@
 @import "tailwindcss";
 
 :root {
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "Segoe UI", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   color-scheme: dark;
+  color: #f8fafc;
+  background:
+    radial-gradient(circle at top, rgba(255, 132, 214, 0.22), transparent 34%),
+    linear-gradient(180deg, #1e0938 0%, #12051f 55%, #09030f 100%);
 }
 
 body {
   margin: 0;
+  min-width: 320px;
+  background: transparent;
 }
 
 .brand-text {
@@ -17,4 +23,78 @@ body {
     -2px 2px 0 #000,
     2px 2px 0 #000,
     0 4px 0 #000;
+}
+
+a {
+  color: inherit;
+}
+
+.privacy-shell {
+  min-height: 100vh;
+  padding: 40px 20px;
+}
+
+.privacy-card {
+  width: min(860px, 100%);
+  margin: 0 auto;
+  padding: 32px 24px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 28px;
+  background: rgba(13, 8, 22, 0.78);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(14px);
+}
+
+.privacy-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f9a8d4;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.privacy-card h1 {
+  margin: 18px 0 8px;
+  font-size: clamp(2rem, 4vw, 3.5rem);
+  line-height: 1;
+}
+
+.privacy-meta {
+  margin: 0 0 24px;
+  color: rgba(248, 250, 252, 0.72);
+  font-size: 0.95rem;
+}
+
+.privacy-card h2 {
+  margin: 28px 0 10px;
+  font-size: 1.15rem;
+  line-height: 1.35;
+}
+
+.privacy-card p,
+.privacy-card li {
+  color: rgba(248, 250, 252, 0.9);
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+.privacy-card ul {
+  margin: 0;
+  padding-left: 22px;
+}
+
+@media (max-width: 640px) {
+  .privacy-shell {
+    padding: 20px 14px;
+  }
+
+  .privacy-card {
+    padding: 24px 18px;
+    border-radius: 22px;
+  }
 }

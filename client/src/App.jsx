@@ -7,6 +7,8 @@ const sessionStorageKey = 'hamme_web_session_id';
 const votedCodesKey = 'hamme_voted_codes';
 const pendingTtlSeconds = Math.max(30, Number(import.meta.env.VITE_PENDING_TTL_SECONDS) || 60);
 const pendingTtlMs = pendingTtlSeconds * 1000;
+const currentPath = window.location.pathname.replace(/\/+$/, '') || '/';
+const isPrivacyPolicyRoute = currentPath === '/privacy-policy';
 
 function hasAlreadyVoted(code) {
   if (!code) return false;
@@ -52,6 +54,14 @@ function buildDeepLink({ shareCode, type, token }) {
 }
 
 function App() {
+  if (isPrivacyPolicyRoute) {
+    return <PrivacyPolicyPage />;
+  }
+
+  return <ShareFlowApp />;
+}
+
+function ShareFlowApp() {
   const shareCode = readShareCodeFromPath();
   const [isSent, setIsSent] = useState(false);
   const [alreadyVoted] = useState(() => hasAlreadyVoted(shareCode));
@@ -172,7 +182,7 @@ function App() {
         throw new Error(`Failed with status ${response.status}`);
       }
       const data = await response.json();
-      setInteractionResult(data); // contains pendingToken
+      setInteractionResult(data);
       setIsSent(true);
       markAsVoted(shareCode);
       if (data.expiresAt) {
@@ -205,8 +215,8 @@ function App() {
 
   if (profileError || !profile) {
     return (
-      <main className="min-h-screen bg-[linear-gradient(180deg,#9b63f7_0%,#8f48fa_48%,#7c35ff_100%)] text-white" >
-        <section className="mx-auto flex min-h-screen w-full max-w-[360px] items-center justify-center px-4 text-center" >
+      <main className="min-h-screen bg-[linear-gradient(180deg,#9b63f7_0%,#8f48fa_48%,#7c35ff_100%)] text-white">
+        <section className="mx-auto flex min-h-screen w-full max-w-[360px] items-center justify-center px-4 text-center">
           <p className="text-lg font-bold">{profileError || 'Profile unavailable.'}</p>
         </section>
       </main>
@@ -251,6 +261,101 @@ function App() {
   );
 }
 
+function PrivacyPolicyPage() {
+  return (
+    <main className="privacy-shell">
+      <section className="privacy-card">
+        <div className="privacy-eyebrow">Hamme</div>
+        <h1>Privacy Policy</h1>
+        <p className="privacy-meta">Last updated: June 27, 2026</p>
+        <p>
+          This Privacy Policy explains how Hamme collects, uses, stores, and shares information when you use the
+          Hamme mobile application, related web pages, and connected services.
+        </p>
+
+        <h2>1. Information We Collect</h2>
+        <p>We may collect the following categories of information:</p>
+        <ul>
+          <li>Account information such as your name, email address, username, Instagram ID, and profile image.</li>
+          <li>Profile and app activity such as your share code, anonymous reactions, matches, and in-app interactions.</li>
+          <li>Device and technical information such as app version, device type, browser type, IP address, and log data.</li>
+          <li>Session and security data used to keep you signed in and protect the service from abuse or fraud.</li>
+        </ul>
+
+        <h2>2. How We Use Information</h2>
+        <ul>
+          <li>To create and manage your account.</li>
+          <li>To deliver core app features, including profile sharing, anonymous responses, and match-related experiences.</li>
+          <li>To maintain service performance, security, and reliability.</li>
+          <li>To troubleshoot bugs, prevent misuse, and improve the app.</li>
+          <li>To comply with legal obligations and enforce our terms.</li>
+        </ul>
+
+        <h2>3. How Anonymous Interactions Work</h2>
+        <p>
+          Hamme allows users to send responses through shared profile links. Those responses are processed by our
+          backend to power app features such as anonymous reactions and match detection. Public profile pages are
+          designed not to expose private account details like a user&apos;s email address.
+        </p>
+
+        <h2>4. Sharing of Information</h2>
+        <p>We do not sell your personal information. We may share information only in the following situations:</p>
+        <ul>
+          <li>With service providers or infrastructure partners that help us operate the app.</li>
+          <li>When required by law, regulation, legal process, or government request.</li>
+          <li>To protect the rights, safety, security, and integrity of Hamme, our users, or the public.</li>
+          <li>As part of a business transfer such as a merger, acquisition, or asset sale.</li>
+        </ul>
+
+        <h2>5. Data Retention</h2>
+        <p>
+          We retain information for as long as needed to provide the service, maintain security, resolve disputes,
+          enforce agreements, and meet legal requirements. Retention periods may vary depending on the type of data and
+          how it is used.
+        </p>
+
+        <h2>6. Data Security</h2>
+        <p>
+          We use reasonable technical and organizational measures to protect information. No method of transmission or
+          storage is completely secure, so we cannot guarantee absolute security.
+        </p>
+
+        <h2>7. Your Choices</h2>
+        <ul>
+          <li>You can choose what profile details you provide within the app.</li>
+          <li>You may request account-related help, updates, or deletion support through our contact channel.</li>
+          <li>You can stop using the app at any time, subject to any data we must retain for legal or security reasons.</li>
+        </ul>
+
+        <h2>8. Children&apos;s Privacy</h2>
+        <p>
+          Hamme is not intended for children under 13, and we do not knowingly collect personal information from
+          children under 13. If you believe a child has provided personal information, contact us so we can review and
+          remove it where appropriate.
+        </p>
+
+        <h2>9. International Data Processing</h2>
+        <p>
+          Your information may be processed and stored in countries other than your own, where data protection laws may
+          differ from those in your jurisdiction.
+        </p>
+
+        <h2>10. Changes to This Policy</h2>
+        <p>
+          We may update this Privacy Policy from time to time. When we do, we will update the date at the top of this
+          page. Continued use of the app after an update means you accept the revised policy.
+        </p>
+
+        <h2>11. Contact Us</h2>
+        <p>
+          For privacy questions or requests, contact the Hamme team using the support email or contact method listed on
+          your official app listing or website.
+        </p>
+      </section>
+    </main>
+  );
+}
+
 function QuestionScreen({ onAnswer, profileImage, profileName, submittingType, submitError }) {
   return (
     <>
@@ -267,22 +372,21 @@ function QuestionScreen({ onAnswer, profileImage, profileName, submittingType, s
           What do you think of me?
         </div>
 
-        <p className="mt-4 text-[14px] font-medium text-white/95">🙈 send anonymously</p>
+        <p className="mt-4 text-[14px] font-medium text-white/95">Send anonymously</p>
 
         <div className="mt-[10px] flex w-full flex-col gap-[10px]">
           <button onClick={() => onAnswer('friend')} disabled={!!submittingType} className="h-[48px] rounded-2xl bg-[linear-gradient(90deg,#16c9e9,#0569f9)] text-[17px] font-extrabold shadow-[0_7px_0_rgba(0,0,0,0.18)] transition active:translate-y-1 active:shadow-[0_3px_0_rgba(0,0,0,0.18)] disabled:opacity-60">
-            🤝 Friend
+            Friend
           </button>
           <button onClick={() => onAnswer('crush')} disabled={!!submittingType} className="h-[48px] rounded-2xl bg-[linear-gradient(90deg,#d14ce6,#ff3c98)] text-[17px] font-extrabold shadow-[0_7px_0_rgba(0,0,0,0.18)] transition active:translate-y-1 active:shadow-[0_3px_0_rgba(0,0,0,0.18)] disabled:opacity-60">
-            😍 Crush
+            Crush
           </button>
           <button onClick={() => onAnswer('frenemy')} disabled={!!submittingType} className="h-[48px] rounded-2xl bg-[linear-gradient(90deg,#b7a7ee,#58598f)] text-[17px] font-extrabold shadow-[0_7px_0_rgba(0,0,0,0.18)] transition active:translate-y-1 active:shadow-[0_3px_0_rgba(0,0,0,0.18)] disabled:opacity-60">
-            😈 Frenemy
+            Frenemy
           </button>
           {submitError ? <p className="text-xs text-red-200">{submitError}</p> : null}
         </div>
 
-        {/* Tap to play tooltip */}
         <div className="mt-[28px] flex flex-col items-center">
           <div className="relative rounded-full bg-black px-5 py-2 text-[14px] font-black text-white">
             Tap to play
@@ -290,13 +394,11 @@ function QuestionScreen({ onAnswer, profileImage, profileName, submittingType, s
           </div>
         </div>
 
-        {/* HAMME.LINK pill */}
         <div className="mt-[14px] flex h-[40px] items-center justify-center rounded-full bg-white px-5 shadow-[0_4px_12px_rgba(0,0,0,0.1)]">
-          <span className="mr-2 text-[16px]">🔗</span>
+          <span className="mr-2 text-[16px]">Link</span>
           <span className="text-[14px] font-black tracking-wide text-black">HAMME.LINK</span>
         </div>
 
-        {/* Arrows pointing up */}
         <div className="mt-[14px] flex items-center gap-6">
           <svg width="24" height="32" viewBox="0 0 24 32" fill="none"><path d="M12 30V4M12 4L4 13M12 4L20 13" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/></svg>
           <svg width="24" height="32" viewBox="0 0 24 32" fill="none"><path d="M12 30V4M12 4L4 13M12 4L20 13" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -349,12 +451,10 @@ function RevealScreen({
   const handleReveal = async () => {
     if (!pendingToken && !shareCode) return;
 
-    // Extend the server-side expiry to give the user time to install/open the app.
     if (pendingToken) {
       try {
         await fetch(`${apiBaseUrl}/interactions/pending/${pendingToken}/touch`, { method: 'POST' });
       } catch {
-        // Non-fatal — proceed with the deep link regardless.
       }
     }
 
@@ -369,8 +469,6 @@ function RevealScreen({
     if (shareCode) referrerParams.set('hamme_code', shareCode);
     if (selectedType) referrerParams.set('hamme_type', selectedType);
 
-    // Use the https Play Store URL — works in all Android browsers and still
-    // passes the referrer through to the app after install.
     const playStoreUrl = `https://play.google.com/store/apps/details?id=com.hamme.app&referrer=${encodeURIComponent(referrerParams.toString())}`;
     const appStoreUrl = import.meta.env.VITE_APP_STORE_URL ?? '';
 
@@ -378,7 +476,6 @@ function RevealScreen({
 
     console.info('[Web] deep link triggered', { deepLink });
 
-    // Redirect to store if app not installed (after a short delay)
     setTimeout(() => {
       if (document.visibilityState === 'visible') {
         if (isAndroid) {
@@ -386,7 +483,6 @@ function RevealScreen({
         } else if (isIOS && appStoreUrl) {
           window.location.href = appStoreUrl;
         }
-        // Desktop users: no redirect (no store available)
       }
     }, 2500);
   };
@@ -394,7 +490,7 @@ function RevealScreen({
   return (
     <div className="w-full">
       <div className="mx-auto flex h-[25px] w-[96px] items-center justify-center rounded-full border border-white/80 bg-white/10 text-[18px] font-extrabold">
-        <span className="mr-[7px] flex h-[19px] w-[19px] items-center justify-center rounded-full bg-white text-[12px] text-[#9b55f7]">✓</span>
+        <span className="mr-[7px] flex h-[19px] w-[19px] items-center justify-center rounded-full bg-white text-[12px] text-[#9b55f7]">OK</span>
         Sent!
       </div>
 
@@ -428,10 +524,10 @@ function RevealScreen({
       <button
         onClick={handleReveal}
         disabled={isExpired}
-        className="mt-[12px] flex h-[61px] w-full items-center justify-center rounded-[27px] bg-white px-8 text-[20px] font-black text-[#c000df] shadow-[0_7px_0_rgba(0,0,0,0.10)] transition active:translate-y-1 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none disabled:active:translate-y-0"
+        className="mt-[12px] flex h-[61px] w-full items-center justify-center rounded-[27px] bg-white px-8 text-[20px] font-black text-[#c000df] shadow-[0_7px_0_rgba(0,0,0,0.10)] transition active:translate-y-1 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none disabled:active:translate-y-0"
       >
-        <span className="flex-1">{isExpired ? '⏰ Link Expired' : '👀 Reveal'}</span>
-        {!isExpired && <span className="text-[27px] font-light">→</span>}
+        <span className="flex-1">{isExpired ? 'Link Expired' : 'Reveal'}</span>
+        {!isExpired && <span className="text-[27px] font-light">{"->"}</span>}
       </button>
 
       {/* <button
@@ -444,8 +540,6 @@ function RevealScreen({
       {copyStatus ? (
         <p className="mt-2 text-[12px] font-bold text-white/75">{copyStatus}</p>
       ) : null}
-
-      {/* No web fallback — mobile users go to the store, desktop gets no redirect */}
     </div>
   );
 }
@@ -454,7 +548,7 @@ function AlreadyVotedScreen({ profileName, profileImage }) {
   return (
     <div className="w-full">
       <div className="mx-auto flex h-[25px] w-[96px] items-center justify-center rounded-full border border-white/80 bg-white/10 text-[18px] font-extrabold">
-        <span className="mr-[7px] flex h-[19px] w-[19px] items-center justify-center rounded-full bg-white text-[12px] text-[#9b55f7]">✓</span>
+        <span className="mr-[7px] flex h-[19px] w-[19px] items-center justify-center rounded-full bg-white text-[12px] text-[#9b55f7]">OK</span>
         Sent!
       </div>
       <div className="mt-[40px] flex flex-col items-center gap-3">
@@ -462,7 +556,7 @@ function AlreadyVotedScreen({ profileName, profileImage }) {
           <img src={profileImage} alt="Profile" className="h-full w-full object-cover" />
         </div>
         <h2 className="text-[24px] font-black leading-tight">You already voted!</h2>
-        <p className="text-[15px] font-medium text-white/70 max-w-[260px]">
+        <p className="max-w-[260px] text-[15px] font-medium text-white/70">
           You already sent your reaction to <strong>{profileName}</strong>. Only one vote per person is allowed.
         </p>
       </div>
