@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hamme_app/core/widgets/emoji_image.dart';
@@ -1656,7 +1657,12 @@ class _ResponseButton extends StatelessWidget {
           ],
         ),
         child: TextButton(
-          onPressed: disabled ? null : onTap,
+          onPressed: disabled
+              ? null
+              : () {
+                  HapticFeedback.mediumImpact();
+                  onTap();
+                },
           style: TextButton.styleFrom(
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(18),

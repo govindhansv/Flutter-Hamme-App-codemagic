@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:hamme_app/models/match_record.dart';
 import 'package:hamme_app/utils/constants/fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -25,6 +26,18 @@ class PollMatchOverlay extends StatefulWidget {
 
 class _PollMatchOverlayState extends State<PollMatchOverlay> {
   String get _otherInstagram => widget.match.matchedUser.instagramId;
+
+  @override
+  void initState() {
+    super.initState();
+    _triggerMatchHaptics();
+  }
+
+  Future<void> _triggerMatchHaptics() async {
+    HapticFeedback.mediumImpact();
+    await Future.delayed(const Duration(milliseconds: 150));
+    HapticFeedback.heavyImpact();
+  }
   // AppUser doesn't carry snapchat — instagram only for this path
   bool get _hasInstagram => _otherInstagram.isNotEmpty;
 

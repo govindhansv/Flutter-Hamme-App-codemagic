@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:hamme_app/core/widgets/emoji_image.dart';
 import 'package:hamme_app/models/interaction_type.dart';
 import 'package:hamme_app/models/interaction_result.dart';
@@ -69,6 +70,18 @@ class MatchSuccessOverlay extends StatefulWidget {
 
 class _MatchSuccessOverlayState extends State<MatchSuccessOverlay> {
   bool _isInstagramSelected = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _triggerMatchHaptics();
+  }
+
+  Future<void> _triggerMatchHaptics() async {
+    HapticFeedback.mediumImpact();
+    await Future.delayed(const Duration(milliseconds: 150));
+    HapticFeedback.heavyImpact();
+  }
 
   Future<void> _openSocial() async {
     final interaction = widget.result.interaction;
