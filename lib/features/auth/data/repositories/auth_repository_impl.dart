@@ -39,13 +39,13 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<AuthSession?> restoreSession() async {
-    final accessToken = await _secureStorageService.readAccessToken();
-    if (accessToken == null || accessToken.isEmpty) {
-      debugPrint('[AuthRepo] restoreSession: no access token');
-      return null;
-    }
-
     try {
+      final accessToken = await _secureStorageService.readAccessToken();
+      if (accessToken == null || accessToken.isEmpty) {
+        debugPrint('[AuthRepo] restoreSession: no access token');
+        return null;
+      }
+
       final refreshToken = await _secureStorageService.readRefreshToken();
       final user = await _remoteDataSource.getCurrentUser();
       debugPrint('[AuthRepo] restoreSession success: user=${user.id}');

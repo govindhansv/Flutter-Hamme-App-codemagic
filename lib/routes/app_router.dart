@@ -18,16 +18,26 @@ import '../features/profile/presentation/screens/profile_screen.dart';
 import '../features/shared/presentation/screens/main_shell.dart';
 import '../providers/auth_providers.dart';
 
+class RouterTransitionNotifier extends ChangeNotifier {
+  final Ref _ref;
+
+  RouterTransitionNotifier(this._ref) {
+    _ref.listen<AuthStatus>(authStatusProvider, (_, __) {
+      notifyListeners();
+    });
+  }
+}
+
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
 final appRouterProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authControllerProvider);
-  final authStatus = ref.watch(authStatusProvider);
+  final listenable = RouterTransitionNotifier(ref);
 
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: '/splash',
     overridePlatformDefaultLocation: true,
+    refreshListenable: listenable,
     routes: [
       GoRoute(path: '/', redirect: (_, _) => '/home'),
       GoRoute(path: '/splash', builder: (_, _) => const SplashScreen()),
@@ -107,6 +117,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
     ),
     redirect: (_, state) {
+      final authStatus = ref.read(authStatusProvider);
+      final authState = ref.read(authControllerProvider);
       final isLoading = authStatus == AuthStatus.loading;
       final path = state.matchedLocation;
       final isOnboardingRoute = path.startsWith('/onboarding');
