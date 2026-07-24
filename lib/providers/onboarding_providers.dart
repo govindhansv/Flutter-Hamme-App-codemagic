@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart';
+import 'dart:typed_data';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class OnboardingDraft {
@@ -44,7 +45,7 @@ class OnboardingDraftNotifier extends AsyncNotifier<OnboardingDraft> {
   @override
   Future<OnboardingDraft> build() async {
     final prefs = await SharedPreferences.getInstance();
-    
+
     final birthdayStr = prefs.getString(_birthdayKey);
     final birthday = birthdayStr != null ? DateTime.parse(birthdayStr) : null;
 
@@ -69,11 +70,16 @@ class OnboardingDraftNotifier extends AsyncNotifier<OnboardingDraft> {
     state = AsyncData(state.value!.copyWith(birthday: birthday));
   }
 
-  Future<void> setSocial({required String platform, required String username}) async {
+  Future<void> setSocial({
+    required String platform,
+    required String username,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_socialPlatformKey, platform);
     await prefs.setString(_usernameKey, username);
-    state = AsyncData(state.value!.copyWith(socialPlatform: platform, username: username));
+    state = AsyncData(
+      state.value!.copyWith(socialPlatform: platform, username: username),
+    );
   }
 
   Future<void> setProfileImageUrl(String url) async {
@@ -97,6 +103,19 @@ final onboardingDraftProvider =
     AsyncNotifierProvider<OnboardingDraftNotifier, OnboardingDraft>(
       OnboardingDraftNotifier.new,
     );
+
+/// Holds a selected image only until registration completes. Keeping the raw
+/// file out of SharedPreferences avoids persisting a large, sensitive photo.
+class OnboardingProfileImage {
+  const OnboardingProfileImage({required this.bytes, required this.filename});
+
+  final Uint8List bytes;
+  final String filename;
+}
+
+final onboardingProfileImageProvider = StateProvider<OnboardingProfileImage?>(
+  (ref) => null,
+);
 
 final onboardingCompletionProvider =
     AsyncNotifierProvider<OnboardingCompletionNotifier, bool>(

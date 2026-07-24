@@ -23,5 +23,9 @@ abstract interface class AuthRepository {
 
   Future<AuthSession?> restoreSession();
 
+  /// Restores a saved session only when the associated account is Pro.
+  /// Used after the user explicitly restores their Pro purchase.
+  Future<AuthSession?> restoreProSession();
+
   Future<void> logout();
 }

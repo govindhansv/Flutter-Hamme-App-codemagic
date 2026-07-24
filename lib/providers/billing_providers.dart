@@ -95,6 +95,7 @@ class BillingController extends Notifier<BillingState> {
 
   InAppPurchase? _iap;
   StreamSubscription<List<PurchaseDetails>>? _subscription;
+  Completer<bool>? _restoreCompleter;
 
   @override
   BillingState build() {
@@ -219,13 +220,15 @@ class BillingController extends Notifier<BillingState> {
   }
 
   /// Restores previously purchased entitlements.
-  Future<void> restorePurchases() async {
-    if (state.busy) return;
+  Future<bool> restorePurchases() async {
+    if (state.busy) return false;
     if (_iap == null) {
       state = state.copyWith(error: 'In-app purchases are not available on this platform.');
-      return;
+      return false;
     }
     state = state.copyWith(restoring: true, error: null);
+    final restoreCompleter = Completer<bool>();
+    _restoreCompleter = restoreCompleter;
     try {
       await _iap!.restorePurchases();
     } catch (error) {
@@ -234,14 +237,28 @@ class BillingController extends Notifier<BillingState> {
         restoring: false,
         error: 'Could not restore purchases.',
       );
+      if (!restoreCompleter.isCompleted) restoreCompleter.complete(false);
+      if (identical(_restoreCompleter, restoreCompleter)) {
+        _restoreCompleter = null;
+      }
+      return false;
     }
-    // The actual result arrives via the purchase stream. Clear the spinner
-    // after a short grace period in case there are no purchases to restore.
+
+    // The actual result arrives via the purchase stream. If the store returns
+    // no restored purchase, finish after a short grace period.
     Future<void>.delayed(const Duration(seconds: 3), () {
       if (state.restoring) {
-        state = state.copyWith(restoring: false);
+        state = state.copyWith(
+          restoring: false,
+          error: 'No previous Pro purchase was found.',
+        );
+        if (!restoreCompleter.isCompleted) restoreCompleter.complete(false);
+        if (identical(_restoreCompleter, restoreCompleter)) {
+          _restoreCompleter = null;
+        }
       }
     });
+    return restoreCompleter.future;
   }
 
   Future<void> _onPurchasesUpdated(List<PurchaseDetails> purchases) async {
@@ -273,12 +290,16 @@ class BillingController extends Notifier<BillingState> {
               restoring: false,
               error: null,
             );
+            _restoreCompleter?.complete(true);
+            _restoreCompleter = null;
           } else {
             state = state.copyWith(
               purchasePending: false,
               restoring: false,
               error: 'Could not verify purchase.',
             );
+            _restoreCompleter?.complete(false);
+            _restoreCompleter = null;
           }
           break;
       }

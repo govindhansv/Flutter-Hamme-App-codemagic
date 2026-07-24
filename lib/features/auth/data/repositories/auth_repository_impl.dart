@@ -66,6 +66,34 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
+  Future<AuthSession?> restoreProSession() async {
+    try {
+      final accessToken = await _secureStorageService.readAccessToken();
+      if (accessToken == null || accessToken.isEmpty) {
+        debugPrint('[AuthRepo] restoreProSession: no saved session');
+        return null;
+      }
+
+      final refreshToken = await _secureStorageService.readRefreshToken();
+      final user = await _remoteDataSource.getCurrentUser();
+      if (!user.isPro) {
+        debugPrint('[AuthRepo] restoreProSession: saved user is not Pro');
+        return null;
+      }
+
+      debugPrint('[AuthRepo] restoreProSession success: user=${user.id}');
+      return AuthSession(
+        user: user,
+        accessToken: accessToken,
+        refreshToken: refreshToken,
+      );
+    } catch (error) {
+      debugPrint('[AuthRepo] restoreProSession failed: $error');
+      return null;
+    }
+  }
+
+  @override
   Future<AuthSession> signUp({
     required String name,
     required String email,

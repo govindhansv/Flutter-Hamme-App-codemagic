@@ -3,6 +3,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hamme_app/features/profile/data/datasources/profile_remote_data_source.dart';
+import 'package:hamme_app/features/profile/data/datasources/upload_remote_data_source.dart';
 import 'package:hamme_app/core/utils/app_exception.dart';
 import 'package:hamme_app/providers/api_providers.dart';
 import 'package:hamme_app/providers/auth_providers.dart';
@@ -30,6 +31,7 @@ class ProScreen extends ConsumerStatefulWidget {
 
 class _ProScreenState extends ConsumerState<ProScreen> {
   bool _isSubmitting = false;
+  bool _isRestoringProfile = false;
   String? _errorText;
 
   /// The top-right close button. In the upgrade flow it simply dismisses the
@@ -50,6 +52,60 @@ class _ProScreenState extends ConsumerState<ProScreen> {
   /// Starts a real in-app purchase for the Pro subscription.
   Future<void> _buyPro() async {
     await ref.read(billingControllerProvider.notifier).buyPro();
+  }
+
+  Future<void> _uploadSelectedProfileImage() async {
+    final selectedImage = ref.read(onboardingProfileImageProvider);
+    if (selectedImage == null) return;
+
+    final apiService = ref.read(apiServiceProvider);
+    final imageUrl = await UploadRemoteDataSource(
+      apiService,
+    ).uploadProfileImageBytes(
+      bytes: selectedImage.bytes,
+      filename: selectedImage.filename,
+    );
+    await ProfileRemoteDataSource(apiService).updateMe(avatarUrl: imageUrl);
+    await ref
+        .read(onboardingDraftProvider.notifier)
+        .setProfileImageUrl(imageUrl);
+    ref.read(onboardingProfileImageProvider.notifier).state = null;
+  }
+
+  Future<void> _restoreProProfile() async {
+    if (_isRestoringProfile) return;
+    setState(() {
+      _isRestoringProfile = true;
+      _errorText = null;
+    });
+
+    try {
+      final purchaseRestored =
+          await ref.read(billingControllerProvider.notifier).restorePurchases();
+      if (!purchaseRestored) return;
+
+      final restored =
+          await ref.read(authControllerProvider.notifier).restoreProProfile();
+      if (!restored) {
+        throw const AppException(
+          'No saved Pro profile was found on this device.',
+        );
+      }
+      if (!mounted) return;
+      context.go('/home');
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorText =
+            error is AppException
+                ? error.message
+                : 'Could not restore your Pro profile. Please try again.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isRestoringProfile = false);
+      }
+    }
   }
 
   /// Onboarding-only: finalize registration / profile sync, then go home.
@@ -76,23 +132,31 @@ class _ProScreenState extends ConsumerState<ProScreen> {
         final age =
             draft.birthday == null
                 ? 18
-                : (DateTime.now().difference(draft.birthday!).inDays / 365.25).floor();
+                : (DateTime.now().difference(draft.birthday!).inDays / 365.25)
+                    .floor();
         debugPrint('[Onboarding] guest register begin');
-        await ref.read(authControllerProvider.notifier).guestRegister(
-          age: age.clamp(13, 100),
-          displayName: (draft.name ?? 'Guest').trim(),
-          username: (draft.username ?? 'user$now').trim(),
-          instagramId:
-              draft.socialPlatform?.toLowerCase().contains('instagram') == true
-                  ? draft.username?.trim()
-                  : null,
-          snapchatId:
-              draft.socialPlatform?.toLowerCase().contains('snapchat') == true
-                  ? draft.username?.trim()
-                  : null,
-          avatarUrl: draft.profileImageUrl,
-        );
-        if (!mounted) return;        final authState = ref.read(authControllerProvider);
+        await ref
+            .read(authControllerProvider.notifier)
+            .guestRegister(
+              age: age.clamp(13, 100),
+              displayName: (draft.name ?? 'Guest').trim(),
+              username: (draft.username ?? 'user$now').trim(),
+              instagramId:
+                  draft.socialPlatform?.toLowerCase().contains('instagram') ==
+                          true
+                      ? draft.username?.trim()
+                      : null,
+              snapchatId:
+                  draft.socialPlatform?.toLowerCase().contains('snapchat') ==
+                          true
+                      ? draft.username?.trim()
+                      : null,
+              // A newly chosen photo is uploaded after this call, once we have an
+              // access token for the protected upload endpoint.
+              avatarUrl: draft.profileImageUrl,
+            );
+        if (!mounted) return;
+        final authState = ref.read(authControllerProvider);
         if (authState.hasError || authState.value == null) {
           throw authState.error ?? Exception('Guest registration failed');
         }
@@ -100,7 +164,9 @@ class _ProScreenState extends ConsumerState<ProScreen> {
           '[Onboarding] guest register success: user=${authState.value?.user.id}',
         );
       } else {
-        final dataSource = ProfileRemoteDataSource(ref.read(apiServiceProvider));
+        final dataSource = ProfileRemoteDataSource(
+          ref.read(apiServiceProvider),
+        );
         await dataSource.updateMe(
           name: draft.name?.trim(),
           instagramId: draft.username?.trim(),
@@ -111,6 +177,8 @@ class _ProScreenState extends ConsumerState<ProScreen> {
         debugPrint('[Onboarding] existing session profile sync success');
       }
 
+      await _uploadSelectedProfileImage();
+
       debugPrint('[Onboarding] onboarding completion handled by auth flow');
       if (!mounted) return;
       context.go('/home');
@@ -118,9 +186,10 @@ class _ProScreenState extends ConsumerState<ProScreen> {
       debugPrint('Onboarding completion failed: $e');
       if (!mounted) return;
       setState(() {
-        _errorText = e is AppException
-            ? e.message
-            : 'Could not complete setup. Please try again.';
+        _errorText =
+            e is AppException
+                ? e.message
+                : 'Could not complete setup. Please try again.';
       });
     } finally {
       if (mounted) {
@@ -136,14 +205,15 @@ class _ProScreenState extends ConsumerState<ProScreen> {
     final billing = ref.watch(billingControllerProvider);
     final isUpgrade = !widget.isOnboarding;
 
-    // When the Pro entitlement is granted (purchase or restore succeeds),
-    // dismiss the paywall.
+    // A new Pro purchase can dismiss the paywall. A restored purchase goes
+    // through _restoreProProfile so its old profile is restored explicitly.
     ref.listen<bool>(isProProvider, (previous, next) {
       if (next == true && (previous != true)) {
+        if (_isRestoringProfile) return;
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('You are now Pro! 🎉')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('You are now Pro! 🎉')));
         if (context.canPop()) {
           context.pop();
         } else {
@@ -155,12 +225,14 @@ class _ProScreenState extends ConsumerState<ProScreen> {
     // The big CTA performs a real purchase in the upgrade flow and just
     // continues onboarding otherwise.
     final bool ctaBusy = isUpgrade ? billing.busy : _isSubmitting;
-    final String ctaLabel = isUpgrade
-        ? (billing.proProduct != null
-              ? 'Subscribe • ${billing.proProduct!.price}'
-              : 'Upgrade to Pro')
-        : 'Continue';
-    final Future<void> Function() onCta = isUpgrade ? _buyPro : _completeOnboarding;
+    final String ctaLabel =
+        isUpgrade
+            ? (billing.proProduct != null
+                ? 'Subscribe • ${billing.proProduct!.price}'
+                : 'Upgrade to Pro')
+            : 'Continue';
+    final Future<void> Function() onCta =
+        isUpgrade ? _buyPro : _completeOnboarding;
     final String? errorText = _errorText ?? (isUpgrade ? billing.error : null);
 
     return Scaffold(
@@ -179,10 +251,7 @@ class _ProScreenState extends ConsumerState<ProScreen> {
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
-                        colors: [
-                          Color(0xFF9E57FF),
-                          Color(0xFF8840FF),
-                        ],
+                        colors: [Color(0xFF9E57FF), Color(0xFF8840FF)],
                       ),
                     ),
                   ),
@@ -221,207 +290,221 @@ class _ProScreenState extends ConsumerState<ProScreen> {
             child: SafeArea(
               top: false,
               child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
-                children: [
-                  const Spacer(flex: 2),
-                  const Text(
-                    'Unlock Unlimited\nAccess 🔒',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontFamily: TFonts.nunito,
-                      fontSize: 28,
-                      height: 1.1,
-                      fontWeight: FontWeight.w900,
-                      color: Color(0xFFCE00E6),
-                    ),
-                  ),
-                  const Spacer(flex: 2),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 16,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF1F0FD),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: const Color(0xFFE2DBFF),
-                        width: 1.5,
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  children: [
+                    const Spacer(flex: 2),
+                    const Text(
+                      'Unlock Unlimited\nAccess 🔒',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontFamily: TFonts.nunito,
+                        fontSize: 28,
+                        height: 1.1,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFFCE00E6),
                       ),
                     ),
-                    child: const Column(
-                      children: [
-                        SizedBox(height: 30),
-                        ProFeature(
-                          icon: Image(
-                            image: AssetImage('assets/icons/Infinity.png'),
-                            width: 28,
-                            height: 28,
-                          ),
-                          title: 'Unlimited Play',
-                          subtitle:
-                              'No waiting, Play every profile,\nanytime.',
+                    const Spacer(flex: 2),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 16,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F0FD),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: const Color(0xFFE2DBFF),
+                          width: 1.5,
                         ),
-                        SizedBox(height: 30),
-                        ProFeature(
-                          icon: Image(
-                            image: AssetImage(
-                              'assets/icons/Right Arrow Curving Left.png',
+                      ),
+                      child: const Column(
+                        children: [
+                          SizedBox(height: 30),
+                          ProFeature(
+                            icon: Image(
+                              image: AssetImage('assets/icons/Infinity.png'),
+                              width: 28,
+                              height: 28,
                             ),
-                            width: 28,
-                            height: 28,
+                            title: 'Unlimited Play',
+                            subtitle:
+                                'No waiting, Play every profile,\nanytime.',
                           ),
-                          title: 'Unlimited Rewinds',
-                          subtitle:
-                              'Picked wrong? Go back and change\nyour pick.',
-                        ),
-                       SizedBox(height: 30),
-                        ProFeature(
-                          icon: Image(
-                            image: AssetImage('assets/icons/High Voltage.png'),
-                            width: 28,
-                            height: 28,
+                          SizedBox(height: 30),
+                          ProFeature(
+                            icon: Image(
+                              image: AssetImage(
+                                'assets/icons/Right Arrow Curving Left.png',
+                              ),
+                              width: 28,
+                              height: 28,
+                            ),
+                            title: 'Unlimited Rewinds',
+                            subtitle:
+                                'Picked wrong? Go back and change\nyour pick.',
                           ),
-                          title: 'Priority Profile',
-                          subtitle:
-                              'Appear first in queues of people you\nreacted to.',
-                        ),
-                        SizedBox(height: 30),
-                      ],
-                    ),
-                  ),
-                  const Spacer(flex: 3),
-                  const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      AvatarBubble(label: 'N', color: Color(0xFFFA3F8F)),
-                      AvatarBubble(label: 'K', color: Color(0xFF1BD66B)),
-                      AvatarBubble(label: 'A', color: Color(0xFF3FA7FF)),
-                      AvatarBubble(label: 'S', color: Color(0xFFFFCB36)),
-                      AvatarBubble(label: 'R', color: Color(0xFFFF5252)),
-                      SizedBox(width: 12),
-                      Text(
-                        '1000+ went PRO today',
-                        style: TextStyle(
-                          fontFamily: TFonts.nunito,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                          color: TColors.darkGrey,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const Spacer(flex: 1),
-                  Container(
-                    width: double.infinity,
-                    height: 58,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(29),
-                      gradient: const LinearGradient(
-                        colors: [
-                          Color(0xFF9E57FF),
-                          Color(0xFF8B44FF),
+                          SizedBox(height: 30),
+                          ProFeature(
+                            icon: Image(
+                              image: AssetImage(
+                                'assets/icons/High Voltage.png',
+                              ),
+                              width: 28,
+                              height: 28,
+                            ),
+                            title: 'Priority Profile',
+                            subtitle:
+                                'Appear first in queues of people you\nreacted to.',
+                          ),
+                          SizedBox(height: 30),
                         ],
                       ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF9E57FF).withValues(alpha: 0.2),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
+                    ),
+                    const Spacer(flex: 3),
+                    const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        AvatarBubble(label: 'N', color: Color(0xFFFA3F8F)),
+                        AvatarBubble(label: 'K', color: Color(0xFF1BD66B)),
+                        AvatarBubble(label: 'A', color: Color(0xFF3FA7FF)),
+                        AvatarBubble(label: 'S', color: Color(0xFFFFCB36)),
+                        AvatarBubble(label: 'R', color: Color(0xFFFF5252)),
+                        SizedBox(width: 12),
+                        Text(
+                          '1000+ went PRO today',
+                          style: TextStyle(
+                            fontFamily: TFonts.nunito,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: TColors.darkGrey,
+                          ),
                         ),
                       ],
                     ),
-                    child: ElevatedButton(
-                      onPressed: ctaBusy ? () {} : () => onCta(),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.transparent,
-                        shadowColor: Colors.transparent,
-                        padding: EdgeInsets.zero,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(29),
+                    const Spacer(flex: 1),
+                    Container(
+                      width: double.infinity,
+                      height: 58,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(29),
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF9E57FF), Color(0xFF8B44FF)],
                         ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(
+                              0xFF9E57FF,
+                            ).withValues(alpha: 0.2),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
-                      child: ctaBusy
-                          ? const SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.5,
-                                valueColor:
-                                    AlwaysStoppedAnimation<Color>(Colors.white),
-                              ),
-                            )
-                          : Text(
-                              ctaLabel,
-                              style: const TextStyle(
-                                fontFamily: TFonts.nunito,
-                                fontSize: 20,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.white,
-                              ),
-                            ),
+                      child: ElevatedButton(
+                        onPressed: ctaBusy ? () {} : () => onCta(),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          padding: EdgeInsets.zero,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(29),
+                          ),
+                        ),
+                        child:
+                            ctaBusy
+                                ? const SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.5,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white,
+                                    ),
+                                  ),
+                                )
+                                : Text(
+                                  ctaLabel,
+                                  style: const TextStyle(
+                                    fontFamily: TFonts.nunito,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w900,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                      ),
                     ),
-                  ),
-                  if (errorText != null) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      errorText,
-                      style: const TextStyle(
-                        color: Colors.redAccent,
-                        fontFamily: TFonts.nunito,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                  const Spacer(flex: 1),
-                  Text(
-                    billing.proProduct != null
-                        ? 'pro renews for ${billing.proProduct!.price}/wk'
-                        : 'pro renews for \$6.99/wk',
-                    style: const TextStyle(
-                      fontFamily: TFonts.nunito,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: TColors.darkGrey,
-                    ),
-                  ),
-                  const Spacer(flex: 1),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      FooterLink(
-                        label: 'Privacy',
-                        onTap: () async {
-                          final url = Uri.parse('https://www.hamme.app/privacy-policy');
-                          if (await canLaunchUrl(url)) {
-                            await launchUrl(url, mode: LaunchMode.externalApplication);
-                          }
-                        },
-                      ),
-                      FooterLink(
-                        label: 'Restore',
-                        onTap: () => ref
-                            .read(billingControllerProvider.notifier)
-                            .restorePurchases(),
-                      ),
-                      FooterLink(
-                        label: 'Terms',
-                        onTap: () async {
-                          final url = Uri.parse('https://www.hamme.app/terms-of-service');
-                          if (await canLaunchUrl(url)) {
-                            await launchUrl(url, mode: LaunchMode.externalApplication);
-                          }
-                        },
+                    if (errorText != null) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        errorText,
+                        style: const TextStyle(
+                          color: Colors.redAccent,
+                          fontFamily: TFonts.nunito,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                        ),
+                        textAlign: TextAlign.center,
                       ),
                     ],
-                  ),
-                  const Spacer(flex: 2),
-                ],
-              ),
+                    const Spacer(flex: 1),
+                    Text(
+                      billing.proProduct != null
+                          ? 'pro renews for ${billing.proProduct!.price}/wk'
+                          : 'pro renews for \$6.99/wk',
+                      style: const TextStyle(
+                        fontFamily: TFonts.nunito,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: TColors.darkGrey,
+                      ),
+                    ),
+                    const Spacer(flex: 1),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        FooterLink(
+                          label: 'Privacy',
+                          onTap: () async {
+                            final url = Uri.parse(
+                              'https://www.hamme.app/privacy-policy',
+                            );
+                            if (await canLaunchUrl(url)) {
+                              await launchUrl(
+                                url,
+                                mode: LaunchMode.externalApplication,
+                              );
+                            }
+                          },
+                        ),
+                        FooterLink(
+                          label: 'Restore',
+                          onTap:
+                              billing.busy || _isRestoringProfile
+                                  ? null
+                                  : _restoreProProfile,
+                        ),
+                        FooterLink(
+                          label: 'Terms',
+                          onTap: () async {
+                            final url = Uri.parse(
+                              'https://www.hamme.app/terms-of-service',
+                            );
+                            if (await canLaunchUrl(url)) {
+                              await launchUrl(
+                                url,
+                                mode: LaunchMode.externalApplication,
+                              );
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                    const Spacer(flex: 2),
+                  ],
+                ),
               ),
             ),
           ),
