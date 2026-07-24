@@ -77,3 +77,103 @@ change.
 Move match-seen state to the backend only when it must survive app-data
 clearing or reinstall, or when the same user can use multiple devices.
 
+# 3. Reinstall and Pro profile restore
+
+## Problem
+
+On iOS, `flutter_secure_storage` stores authentication tokens in the Keychain.
+Keychain values can survive an app uninstall, so automatically restoring the
+saved session after reinstall could show a normal user's old name, profile
+photo, and account data.
+
+## Implemented behavior
+
+- A normal app close and reopen still restores the active session normally.
+- On the first launch of a newly installed app, automatic session restoration
+  is skipped. The app opens onboarding instead of showing an old profile.
+- The old Keychain token is retained only as a possible Pro restore candidate;
+  it is never used automatically after reinstall.
+- The **Restore** link on the Pro page now restores the App Store/Google Play
+  purchase first, then validates the saved profile with the backend.
+- The saved profile is restored only when that backend profile is Pro.
+- Normal users cannot restore an old profile through this action and continue
+  through fresh onboarding.
+
+## Why startup authentication was not removed
+
+Removing `/auth/me` restoration for every startup would log all users out each
+time they close and reopen the app. The first-install marker limits the change
+to reinstall behavior while preserving normal session continuity.
+
+## Test checklist
+
+1. Complete onboarding as a normal user, close the app, then reopen it. The
+   same session should remain active.
+2. Uninstall and reinstall the app. It should start at onboarding and not show
+   the old profile automatically.
+3. For a Pro account with a restorable store purchase, reinstall the app, open
+   the Pro page, and tap **Restore**. The previous Pro profile should return
+   only after the store restoration and backend validation succeed.
+4. Test **Restore** with a normal account. It must not restore the old profile.
+
+
+# 4. Verified security fixes
+
+Date: 2026-07-24
+
+## 1. JWT signing secrets fail closed
+
+The backend no longer uses predictable fallback values for access and refresh
+token signing. Both server entry points now refuse to serve requests unless
+`JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` are configured.
+
+Affected files:
+
+- `backend/src/config/env.js`
+- `backend/src/server.js`
+- `backend/api/index.js`
+
+Deployment requirement: set both secrets to unique, high-entropy values in the
+production environment before deploying.
+
+## 2. Profile-image uploads require authentication
+
+`POST /api/v1/upload/profile-image` now runs JWT authentication before Multer
+accepts the image. The upload filter also requires both an approved MIME type
+and matching file extension (JPG, PNG, or WEBP).
+
+The Flutter onboarding flow was updated to preserve the selected photo in
+memory until guest registration succeeds. It then uploads the image using the
+new authenticated session and saves the returned profile image URL.
+
+Affected files:
+
+- `backend/src/routes/uploadRoutes.js`
+- `lib/features/profile/data/datasources/upload_remote_data_source.dart`
+- `lib/features/onboarding/presentation/screens/profile_upload_screen.dart`
+- `lib/features/onboarding/presentation/screens/pro_screen.dart`
+- `lib/providers/onboarding_providers.dart`
+
+## 3. Socket.IO rooms are authenticated
+
+Socket connections now require a valid access token, supplied through either
+`handshake.auth.token` or an `Authorization: Bearer <token>` header. The server
+derives the user ID from the verified token and joins that room automatically.
+The client-controlled `join:user` event has been removed.
+
+Future Socket.IO clients must connect with:
+
+```js
+io(apiUrl, { auth: { token: accessToken } });
+```
+
+Affected file:
+
+- `backend/src/socket.js`
+
+## Verification
+
+- `node --check` passed for all changed backend JavaScript files.
+- `git diff --check` passed with no whitespace errors.
+- `flutter analyze --no-pub` was attempted but did not complete within 64
+  seconds in this workspace and returned no diagnostics before timeout.
