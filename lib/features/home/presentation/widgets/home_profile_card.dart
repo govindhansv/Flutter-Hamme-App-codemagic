@@ -19,6 +19,147 @@ class HomeProfileCard extends ConsumerStatefulWidget {
   ConsumerState<HomeProfileCard> createState() => _HomeProfileCardState();
 }
 
+class _EditNameDialog extends StatefulWidget {
+  const _EditNameDialog({required this.initialName});
+
+  final String initialName;
+
+  @override
+  State<_EditNameDialog> createState() => _EditNameDialogState();
+}
+
+class _EditNameDialogState extends State<_EditNameDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialName);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _save() => Navigator.of(context).pop(_controller.text.trim());
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 28),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 26, 24, 22),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Edit your name',
+              style: TextStyle(
+                fontFamily: TFonts.nunito,
+                fontWeight: FontWeight.w900,
+                fontSize: 23,
+                color: TColors.black,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'This is how your profile appears in Hamme.',
+              style: TextStyle(
+                fontFamily: TFonts.nunito,
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+                color: TColors.darkGrey,
+              ),
+            ),
+            const SizedBox(height: 20),
+            TextField(
+              controller: _controller,
+              autofocus: true,
+              textCapitalization: TextCapitalization.words,
+              maxLength: 40,
+              style: const TextStyle(
+                fontFamily: TFonts.nunito,
+                fontWeight: FontWeight.w700,
+                fontSize: 17,
+              ),
+              decoration: InputDecoration(
+                counterText: '',
+                hintText: 'Your name',
+                hintStyle: const TextStyle(
+                  fontFamily: TFonts.nunito,
+                  color: TColors.grey,
+                ),
+                filled: true,
+                fillColor: TColors.hammeSurface,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 15,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(
+                    color: TColors.hammePrimary,
+                    width: 1.5,
+                  ),
+                ),
+              ),
+              onSubmitted: (_) => _save(),
+            ),
+            const SizedBox(height: 22),
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text(
+                      'Cancel',
+                      style: TextStyle(
+                        fontFamily: TFonts.nunito,
+                        fontWeight: FontWeight.w800,
+                        color: TColors.darkGrey,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF9E57FF), Color(0xFF8B44FF)],
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: TextButton(
+                      onPressed: _save,
+                      child: const Text(
+                        'Save',
+                        style: TextStyle(
+                          fontFamily: TFonts.nunito,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _HomeProfileCardState extends ConsumerState<HomeProfileCard> {
   static const int _maxImageBytes = 10 * 1024 * 1024;
   static const Set<String> _allowedExtensions = {'jpeg', 'jpg', 'png', 'webp'};
@@ -30,122 +171,10 @@ class _HomeProfileCardState extends ConsumerState<HomeProfileCard> {
   Future<void> _editProfileName(String currentName) async {
     if (_isUpdatingName) return;
 
-    final controller = TextEditingController(text: currentName);
     final updatedName = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => Dialog(
-        insetPadding: const EdgeInsets.symmetric(horizontal: 28),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 26, 24, 22),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Edit your name',
-                style: TextStyle(
-                  fontFamily: TFonts.nunito,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 23,
-                  color: TColors.black,
-                ),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                'This is how your profile appears in Hamme.',
-                style: TextStyle(
-                  fontFamily: TFonts.nunito,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
-                  color: TColors.darkGrey,
-                ),
-              ),
-              const SizedBox(height: 20),
-              TextField(
-                controller: controller,
-                autofocus: true,
-                textCapitalization: TextCapitalization.words,
-                maxLength: 40,
-                style: const TextStyle(
-                  fontFamily: TFonts.nunito,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 17,
-                ),
-                decoration: InputDecoration(
-                  counterText: '',
-                  hintText: 'Your name',
-                  hintStyle: const TextStyle(
-                    fontFamily: TFonts.nunito,
-                    color: TColors.grey,
-                  ),
-                  filled: true,
-                  fillColor: TColors.hammeSurface,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 15,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(
-                      color: TColors.hammePrimary,
-                      width: 1.5,
-                    ),
-                  ),
-                ),
-                onSubmitted: (value) => Navigator.of(dialogContext).pop(value.trim()),
-              ),
-              const SizedBox(height: 22),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextButton(
-                      onPressed: () => Navigator.of(dialogContext).pop(),
-                      child: const Text(
-                        'Cancel',
-                        style: TextStyle(
-                          fontFamily: TFonts.nunito,
-                          fontWeight: FontWeight.w800,
-                          color: TColors.darkGrey,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF9E57FF), Color(0xFF8B44FF)],
-                        ),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: TextButton(
-                        onPressed: () => Navigator.of(dialogContext)
-                            .pop(controller.text.trim()),
-                        child: const Text(
-                          'Save',
-                          style: TextStyle(
-                            fontFamily: TFonts.nunito,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
+      builder: (_) => _EditNameDialog(initialName: currentName),
     );
-    controller.dispose();
 
     if (updatedName == null || updatedName.isEmpty || updatedName == currentName) {
       return;
