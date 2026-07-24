@@ -17,17 +17,17 @@ class TImages {
   static const String snapFill = "assets/icons/snap-fill.png";
 
   // -- Emoji Assets (platform-consistent PNG emojis)
-  static const String emojiCrush = "assets/icons/😍.png";
-  static const String emojiFriend = "assets/icons/🤝.png";
-  static const String emojiFrenemy = "assets/icons/😈.png";
-  static const String emojiBirthday = "assets/icons/🎂.png";
-  static const String emojiCamera = "assets/icons/📸.png";
-  static const String emojiSpeaking = "assets/icons/🗣️.png";
-  static const String emojiHourglass = "assets/icons/⏳.png";
-  static const String emojiEyes = "assets/icons/👀.png";
-  static const String emojiPleading = "assets/icons/🥺.png";
-  static const String emojiAlert = "assets/icons/🚨.png";
-  static const String emojiMonkey = "assets/icons/🙈.png";
+  static const String emojiCrush = "assets/icons/emoji_crush.png";
+  static const String emojiFriend = "assets/icons/emoji_friend.png";
+  static const String emojiFrenemy = "assets/icons/emoji_frenemy.png";
+  static const String emojiBirthday = "assets/icons/emoji_birthday.png";
+  static const String emojiCamera = "assets/icons/emoji_camera.png";
+  static const String emojiSpeaking = "assets/icons/emoji_speaking.png";
+  static const String emojiHourglass = "assets/icons/emoji_hourglass.png";
+  static const String emojiEyes = "assets/icons/emoji_eyes.png";
+  static const String emojiPleading = "assets/icons/emoji_pleading.png";
+  static const String emojiAlert = "assets/icons/emoji_alert.png";
+  static const String emojiMonkey = "assets/icons/emoji_monkey.png";
 
   // -- Category Icons
   static const String sportIcon =

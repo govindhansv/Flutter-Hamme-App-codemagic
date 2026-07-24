@@ -28,15 +28,11 @@ class ProfileUploadScreen extends ConsumerStatefulWidget {
 
 class _ProfileUploadScreenState extends ConsumerState<ProfileUploadScreen> {
   static const int _maxImageBytes = 10 * 1024 * 1024;
-  static const Set<String> _allowedExtensions = {
-    'jpeg',
-    'jpg',
-    'png',
-    'webp',
-  };
+  static const Set<String> _allowedExtensions = {'jpeg', 'jpg', 'png', 'webp'};
 
   final ImagePicker _imagePicker = ImagePicker();
   Uint8List? _previewBytes;
+  bool _isPickingImage = false;
   bool _isUploading = false;
   String? _uploadError;
 
@@ -46,62 +42,73 @@ class _ProfileUploadScreenState extends ConsumerState<ProfileUploadScreen> {
   }
 
   Future<void> _pickProfileImage() async {
-    if (_isUploading) return;
-    final XFile? pickedFile = await _imagePicker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 85,
-      maxWidth: 1600,
-      maxHeight: 1600,
-    );
-
-    if (pickedFile == null) return;
-
-    final fileName = pickedFile.name;
-    final extension =
-        fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
-
-    if (!_allowedExtensions.contains(extension)) {
-      _showMessage('Please upload a JPG, JPEG, PNG, or WEBP image.');
-      return;
-    }
-
-    final bytes = await pickedFile.readAsBytes();
-    if (bytes.length > _maxImageBytes) {
-      _showMessage('Image size must be less than 10 MB.');
-      return;
-    }
-
-    if (!mounted) return;
-    setState(() {
-      _isUploading = true;
-      _uploadError = null;
-      _previewBytes = bytes;
-    });
+    if (_isPickingImage || _isUploading) return;
+    _isPickingImage = true;
 
     try {
-      final uploadDataSource = UploadRemoteDataSource(
-        ref.read(apiServiceProvider),
+      final XFile? pickedFile = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+        maxWidth: 1600,
+        maxHeight: 1600,
       );
-      final imageUrl = await uploadDataSource.uploadProfileImageBytes(
-        bytes: bytes,
-        filename: fileName.isNotEmpty ? fileName : 'profile.jpg',
-      );
-      await ref
-          .read(onboardingDraftProvider.notifier)
-          .setProfileImageUrl(imageUrl);
-      if (!mounted) return;
-      context.go('/onboarding/social_media');
-    } catch (error) {
+
+      if (pickedFile == null) return;
+
+      final fileName = pickedFile.name;
+      final extension =
+          fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
+
+      if (!_allowedExtensions.contains(extension)) {
+        _showMessage('Please upload a JPG, JPEG, PNG, or WEBP image.');
+        return;
+      }
+
+      final bytes = await pickedFile.readAsBytes();
+      if (bytes.length > _maxImageBytes) {
+        _showMessage('Image size must be less than 10 MB.');
+        return;
+      }
+
       if (!mounted) return;
       setState(() {
-        _uploadError = 'Upload failed. Please try again.';
+        _isUploading = true;
+        _uploadError = null;
+        _previewBytes = bytes;
       });
-    } finally {
-      if (mounted) {
+
+      try {
+        final uploadDataSource = UploadRemoteDataSource(
+          ref.read(apiServiceProvider),
+        );
+        final imageUrl = await uploadDataSource.uploadProfileImageBytes(
+          bytes: bytes,
+          filename: fileName.isNotEmpty ? fileName : 'profile.jpg',
+        );
+        await ref
+            .read(onboardingDraftProvider.notifier)
+            .setProfileImageUrl(imageUrl);
+        if (!mounted) return;
+        context.go('/onboarding/social_media');
+      } catch (error, stackTrace) {
+        debugPrint('[ProfileUpload] upload failed: $error');
+        debugPrintStack(
+          label: '[ProfileUpload] upload stack trace',
+          stackTrace: stackTrace,
+        );
+        if (!mounted) return;
         setState(() {
-          _isUploading = false;
+          _uploadError = 'Upload failed. Please try again.';
         });
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isUploading = false;
+          });
+        }
       }
+    } finally {
+      _isPickingImage = false;
     }
   }
 
@@ -123,7 +130,10 @@ class _ProfileUploadScreenState extends ConsumerState<ProfileUploadScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            DobTopBar(onBack: () => context.go('/onboarding/name'), progress: 0.75),
+            DobTopBar(
+              onBack: () => context.go('/onboarding/name'),
+              progress: 0.75,
+            ),
             const SizedBox(height: 30),
             const Text(
               TTexts.onboardingProfileTitle,
@@ -251,12 +261,14 @@ class _ProfileUploadScreenState extends ConsumerState<ProfileUploadScreen> {
                               shape: BoxShape.circle,
                             ),
                             child: ClipOval(
-                              child: profileImageUrl != null && profileImageUrl.isNotEmpty
-                                  ? Image.network(
-                                    profileImageUrl,
-                                    fit: BoxFit.cover,
-                                  )
-                                  : _previewBytes != null
+                              child:
+                                  profileImageUrl != null &&
+                                          profileImageUrl.isNotEmpty
+                                      ? Image.network(
+                                        profileImageUrl,
+                                        fit: BoxFit.cover,
+                                      )
+                                      : _previewBytes != null
                                       ? Image.memory(
                                         _previewBytes!,
                                         fit: BoxFit.cover,
@@ -330,7 +342,8 @@ class _ProfileUploadScreenState extends ConsumerState<ProfileUploadScreen> {
                 onTap: () {
                   if (profileImageUrl == null || profileImageUrl.isEmpty) {
                     setState(() {
-                      _uploadError = 'Please upload a profile photo to continue.';
+                      _uploadError =
+                          'Please upload a profile photo to continue.';
                     });
                     return;
                   }
