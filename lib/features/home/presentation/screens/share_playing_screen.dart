@@ -27,7 +27,9 @@ class SharePlayingScreen extends ConsumerStatefulWidget {
 
   static const double _storyPixelRatio = 1.0;
   static const Size _storyCanvasSize = Size(1080, 1920);
-  static const String _instagramAppId = '';
+  // The Meta App ID is required by Instagram's Story-sharing handoff.
+  // Supply it at build time with --dart-define=META_APP_ID=<your-app-id>.
+  static const String _instagramAppId = String.fromEnvironment('META_APP_ID');
   static const MethodChannel _storyChannel = MethodChannel('hamme/share_story');
 
   static Future<void> shareStory(

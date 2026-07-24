@@ -34,7 +34,9 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
   bool _isInstagramSelected = true;
   bool _isSharing = false;
 
-  static const String _instagramAppId = ''; // Replace if you have a specific Meta App ID
+  // The Meta App ID is required by Instagram's Story-sharing handoff.
+  // Supply it at build time with --dart-define=META_APP_ID=<your-app-id>.
+  static const String _instagramAppId = String.fromEnvironment('META_APP_ID');
   static const MethodChannel _storyChannel = MethodChannel('hamme/share_story');
 
   Future<void> _captureAndShare() async {
