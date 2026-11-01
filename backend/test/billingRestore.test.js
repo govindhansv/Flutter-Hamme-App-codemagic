@@ -56,6 +56,7 @@ function fixture({ platform = 'android', active = true, old = true, admin = fals
       if (name === '../models/BillingOwnership') return Ownership;
       if (name === '../utils/ApiError') return ApiError;
       if (name === '../utils/logger') return { warn() {}, info() {}, error() {} };
+      if (name === './revenueService') return { upsertPayments: async (payments) => payments.length };
       if (name === '../config/env') return { appleIapPrivateKeyBase64: Buffer.from('-----BEGIN PRIVATE KEY-----').toString('base64'), appleIapIssuerId: 'issuer', appleIapKeyId: 'key', appleIapBundleId: 'com.hamme.app' };
       if (name === 'mongoose') return {
         isValidObjectId: () => false,
@@ -188,4 +189,70 @@ test('delayed Google notification cannot revive old attribution after token repl
   assert.equal(result.ignored, true);
   assert.equal(f.users().get('old').isPro, false);
   assert.equal(f.users().get('new').proPurchaseToken, 'newer-play-token');
+});
+
+test('Play renewal order ids expand to every order of the subscription', () => {
+  const { service } = fixture();
+  assert.deepEqual([...service.expandPlayOrderIds('GPA.1111-2222-3333-44444')], ['GPA.1111-2222-3333-44444']);
+  assert.deepEqual([...service.expandPlayOrderIds('GPA.1111-2222-3333-44444..2')], [
+    'GPA.1111-2222-3333-44444',
+    'GPA.1111-2222-3333-44444..0',
+    'GPA.1111-2222-3333-44444..1',
+    'GPA.1111-2222-3333-44444..2',
+  ]);
+  assert.deepEqual([...service.expandPlayOrderIds(null)], []);
+});
+
+test('Play orders become ledger payments with refunds and Google net revenue', () => {
+  const { service } = fixture();
+  const money = (units, nanos = 0) => ({ currencyCode: 'INR', units: String(units), nanos });
+  const renewal = service.playPaymentFromOrder({
+    orderId: 'GPA.1..3', state: 'PROCESSED', createTime: '2026-10-01T10:00:00Z',
+    total: money(429), tax: money(65, 440000000), developerRevenueInBuyerCurrency: money(310, 500000000),
+    lineItems: [{ productId: 'hamme_pro_weekly' }], buyerAddress: { buyerCountry: 'IN' },
+  }, { purchaseToken: 'tok', userId: 'u1', isTest: false });
+  assert.equal(renewal._id, 'android:GPA.1..3');
+  assert.equal(renewal.kind, 'renewal');
+  assert.equal(renewal.amount, 429);
+  assert.equal(renewal.tax, 65.44);
+  assert.equal(renewal.net, 310.5);
+  assert.equal(renewal.counted, true);
+  assert.equal(renewal.country, 'IN');
+
+  const refunded = service.playPaymentFromOrder({
+    orderId: 'GPA.1', state: 'REFUNDED', createTime: '2026-10-01T10:00:00Z',
+    total: money(429), developerRevenueInBuyerCurrency: money(310),
+  }, { purchaseToken: 'tok', userId: 'u1', isTest: true });
+  assert.equal(refunded.kind, 'new');
+  assert.equal(refunded.refundedAmount, 429);
+  assert.equal(refunded.net, 0);
+  assert.equal(refunded.isTest, true);
+
+  const canceled = service.playPaymentFromOrder({
+    orderId: 'GPA.2', state: 'CANCELED', total: money(429),
+  }, { purchaseToken: 'tok' });
+  assert.equal(canceled.counted, false);
+});
+
+test('App Store transactions become ledger payments with an estimated net', () => {
+  const { service } = fixture();
+  const payment = service.applePaymentFromTransaction({
+    transactionId: '2000001', originalTransactionId: '2000000', productId: 'hamme_pro_weekly',
+    price: 4990, currency: 'USD', purchaseDate: Date.parse('2026-10-02T00:00:00Z'),
+    transactionReason: 'RENEWAL', environment: 'Production', storefront: 'USA',
+  }, 'u1');
+  assert.equal(payment._id, 'ios:2000001');
+  assert.equal(payment.amount, 4.99);
+  assert.equal(payment.net, 4.24);
+  assert.equal(payment.netEstimated, true);
+  assert.equal(payment.kind, 'renewal');
+  assert.equal(payment.isTest, false);
+
+  const revoked = service.applePaymentFromTransaction({
+    transactionId: '2000002', price: 4990, currency: 'USD', purchaseDate: Date.now(),
+    revocationDate: Date.now(), environment: 'Sandbox',
+  }, 'u1');
+  assert.equal(revoked.refundedAmount, 4.99);
+  assert.equal(revoked.net, 0);
+  assert.equal(revoked.isTest, true);
 });

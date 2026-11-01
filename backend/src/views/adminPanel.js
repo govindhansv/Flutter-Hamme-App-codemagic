@@ -1,10 +1,14 @@
 // Self-contained admin panel HTML (no external assets).
+// - Sign-in with personal admin accounts (owner / moderator roles).
+// - Overview: users, Pro, activity and sign-up chart.
+// - Money (owners): store earnings by platform with daily/monthly/yearly charts.
 // - Moderation queue for user reports. Apple Guideline 1.2 requires acting on
 //   every report within 24 hours (remove the content + eject the user).
-// - Users: complimentary Pro grants and bans.
-// - Play settings (app config).
+// - Users: detail view, complimentary Pro grants, bans and account deletion.
+// - Play settings (app config), admin accounts and the activity (audit) log.
 // Served by routes/adminRoutes.js under a strict CSP (inline script/style only,
-// same-origin fetch only). Every API call sends the admin key in `x-admin-key`.
+// same-origin fetch only). Every API call sends the admin's session token as
+// `Authorization: Bearer`.
 // All user-controlled strings are HTML-escaped before rendering, and only
 // http(s)/data:image URLs are ever placed in an <img src>.
 // NOTE: this whole page is a JS template literal. Inside it, double every
@@ -176,37 +180,203 @@ module.exports = `<!doctype html>
     .modal { max-width:none; max-height:92vh; border-radius:16px 16px 0 0; padding:18px 16px 22px; }
     .modal-actions button { flex:1 1 auto; }
   }
+
+  /* Sign-in */
+  .auth-wrap { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:16px; background:linear-gradient(160deg,var(--purple2),var(--purple)); }
+  .auth-card { width:100%; max-width:400px; margin:0; }
+  .auth-card h1 { margin:0 0 4px; font-size:22px; }
+  .auth-card p { margin:0 0 14px; font-size:13px; color:#6b6b80; line-height:1.45; }
+  .field { margin-bottom:12px; }
+  .auth-card button[type=submit] { width:100%; margin-top:4px; }
+
+  /* Header account + tabs */
+  .account { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:13px; }
+  .account strong { font-weight:800; }
+  .account .role { padding:2px 8px; border-radius:999px; background:rgba(255,255,255,.2); font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; }
+  .account button { background:rgba(255,255,255,.18); color:#fff; padding:6px 10px; font-size:12px; }
+  .nav { overflow-x:auto; }
+  .nav button { background:none; color:#fff; opacity:.8; padding:6px 2px; border-radius:0; font-size:13px; border-bottom:2px solid transparent; white-space:nowrap; }
+  .nav button:hover { opacity:1; }
+  .nav button.active { opacity:1; border-bottom-color:#fff; }
+
+  /* Stat cards */
+  .stats { display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:12px; margin-bottom:16px; }
+  .stat { background:#fff; border:1px solid var(--line); border-radius:14px; padding:14px; min-width:0; }
+  .stat-label { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
+  .stat-value { font-size:24px; font-weight:800; margin-top:4px; overflow-wrap:anywhere; }
+  .stat-sub { font-size:12px; color:#6b6b80; margin-top:4px; line-height:1.4; }
+  .stat.alarm { border-color:#f1a9ab; background:#fffafa; }
+  .stat.alarm .stat-value { color:var(--red-ink); }
+  button.stat { text-align:left; font:inherit; color:inherit; cursor:pointer; }
+  button.stat:hover { border-color:#d8c8ff; }
+
+  /* Money */
+  .filters { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; margin-bottom:14px; }
+  .filters > div { min-width:0; }
+  .seg { display:inline-flex; background:#f0eefe; border-radius:10px; padding:3px; gap:2px; }
+  .seg button { background:none; color:var(--purple); padding:7px 12px; font-size:13px; border-radius:8px; }
+  .seg button.active { background:var(--purple); color:#fff; }
+  select { padding:9px 10px; border:1px solid var(--line); border-radius:10px; font-size:14px; font-family:inherit; background:#fff; }
+  .check { display:flex; align-items:center; gap:6px; font-size:13px; color:#3a3a4c; font-weight:600; margin:0; padding-bottom:9px; }
+  .check input { width:auto; }
+  .chart-wrap { position:relative; }
+  .chart { width:100%; height:auto; display:block; }
+  .chart text { font-size:11px; fill:#8a8aa0; font-family:inherit; }
+  .chart .grid { stroke:#ececf3; }
+  .chart .hit { fill:transparent; cursor:default; }
+  .chart .bar-col:hover .hit { fill:rgba(120,56,254,.06); }
+  .chart-tip { min-height:20px; font-size:13px; color:#3a3a4c; margin-top:6px; }
+  .legend { display:flex; gap:14px; flex-wrap:wrap; font-size:12px; font-weight:700; color:#3a3a4c; }
+  .swatch { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:5px; vertical-align:-1px; }
+  .split { display:flex; height:12px; border-radius:999px; overflow:hidden; background:#eef0f3; margin:10px 0 6px; }
+  .split span { display:block; height:100%; }
+  .note { font-size:12px; color:#6b6b80; line-height:1.5; margin:0; }
+  .note + .note { margin-top:6px; }
+  .num { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .badge.android { background:#e6f6ec; color:#1a7f3c; }
+  .badge.ios { background:#efeaff; color:var(--purple); }
+  .badge.test { background:var(--amber-bg); color:var(--amber); }
+  .badge.refund { background:var(--red-bg); color:var(--red-ink); }
+  .badge.inactive { background:#eef0f3; color:#7a7a8c; }
+
+  /* User detail */
+  .modal.wide { max-width:720px; }
+  .detail-head { display:flex; gap:14px; align-items:flex-start; }
+  .detail-head .avatar { width:64px; height:64px; }
+  .kv { display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:8px 16px; margin:12px 0; font-size:13px; }
+  .kv div > span:first-child { display:block; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
+  .mini-stats { display:grid; grid-template-columns:repeat(auto-fit, minmax(110px, 1fr)); gap:8px; margin:12px 0; }
+  .mini-stats div { border:1px solid var(--line); border-radius:10px; padding:8px 10px; font-size:12px; color:#6b6b80; }
+  .mini-stats strong { display:block; font-size:18px; color:var(--ink); }
+  .detail-section { margin-top:14px; }
+  .detail-section h3 { font-size:13px; margin:0 0 8px; }
+  .modal-fields .field input, .modal-fields .field select { width:100%; }
+  .readonly-note { font-size:12px; color:var(--amber); font-weight:700; margin-top:8px; }
+
+  @media (max-width: 640px) {
+    .stats { grid-template-columns:1fr 1fr; }
+    .stat-value { font-size:20px; }
+    .filters > div { width:100%; }
+    .seg { width:100%; }
+    .seg button { flex:1; }
+    select { width:100%; }
+    .detail-head .avatar { width:48px; height:48px; }
+    .hide-sm { display:none; }
+  }
 </style>
 </head>
 <body>
+<div id="authView" class="auth-wrap" hidden>
+  <div class="card auth-card">
+    <form id="loginForm" novalidate>
+      <h1>Hamme Admin</h1>
+      <p>Sign in with your admin account.</p>
+      <div class="field"><label for="loginEmail">Email</label><input id="loginEmail" type="email" autocomplete="username" required /></div>
+      <div class="field"><label for="loginPassword">Password</label><input id="loginPassword" type="password" autocomplete="current-password" required /></div>
+      <button type="submit" class="btn-primary" id="loginBtn">Sign in</button>
+      <div id="loginStatus" class="status-line" aria-live="polite"></div>
+    </form>
+    <form id="bootstrapForm" novalidate hidden>
+      <h1>Create the first owner</h1>
+      <p>No admin accounts exist yet. Enter the server&rsquo;s ADMIN_API_KEY once to create your owner account. After that, everyone signs in with their own email and password.</p>
+      <div class="field"><label for="bootKey">ADMIN_API_KEY</label><input id="bootKey" type="password" autocomplete="off" required /></div>
+      <div class="field"><label for="bootName">Your name</label><input id="bootName" type="text" autocomplete="name" maxlength="80" required /></div>
+      <div class="field"><label for="bootEmail">Email</label><input id="bootEmail" type="email" autocomplete="username" required /></div>
+      <div class="field"><label for="bootPassword">Password (at least 10 characters)</label><input id="bootPassword" type="password" autocomplete="new-password" required /></div>
+      <button type="submit" class="btn-primary" id="bootBtn">Create owner account</button>
+      <div id="bootStatus" class="status-line" aria-live="polite"></div>
+    </form>
+  </div>
+</div>
+
+<div id="appView" hidden>
 <header>
   <div class="header-inner">
     <div>
       <h1>Hamme Admin</h1>
-      <p>Moderation queue, users and plans. Every report must be acted on within 24 hours.</p>
+      <div class="account"><span>Signed in as <strong id="meName"></strong></span><span class="role" id="meRole"></span>
+        <button type="button" id="changePasswordBtn">Change password</button><button type="button" id="signOutBtn">Sign out</button></div>
     </div>
     <div class="counters">
       <a class="counter" id="hdrOpen" href="#reports" title="Open reports"><span class="counter-num" id="openCount">&ndash;</span><span class="counter-label">Open</span></a>
       <a class="counter" id="hdrOverdue" href="#reports" title="Open reports older than 24 hours"><span class="counter-num" id="overdueCount">&ndash;</span><span class="counter-label">Overdue &gt;24h</span></a>
     </div>
   </div>
-  <nav class="nav" aria-label="Sections"><a href="#reports">Reports</a><a href="#users">Users</a><a href="#settings">Settings</a></nav>
+  <nav class="nav" id="nav" aria-label="Sections">
+    <button type="button" data-view="overview">Overview</button>
+    <button type="button" data-view="money" data-owner>Money</button>
+    <button type="button" data-view="reports">Reports</button>
+    <button type="button" data-view="users">Users</button>
+    <button type="button" data-view="settings">Settings</button>
+    <button type="button" data-view="admins" data-owner>Admins</button>
+    <button type="button" data-view="activity" data-owner>Activity log</button>
+  </nav>
 </header>
 <div class="wrap">
-  <div class="card">
-    <div class="row">
-      <div>
-        <label for="adminKey">Admin key</label>
-        <input id="adminKey" type="password" placeholder="Enter ADMIN_API_KEY" />
+  <div id="status" class="status-line" aria-live="polite"></div>
+
+  <section id="overview" data-view-section="overview" aria-labelledby="overviewTitle" hidden>
+    <div class="toolbar">
+      <div class="section-title" id="overviewTitle" style="margin:0;">📊 Overview</div>
+      <button type="button" class="btn-ghost" id="overviewRefresh">Refresh</button>
+    </div>
+    <div class="stats" id="overviewStats"><div class="stat"><div class="stat-label">Loading…</div></div></div>
+    <div class="card">
+      <div class="section-title">New sign-ups · last 30 days</div>
+      <div class="chart-wrap" id="signupChart"></div>
+      <div class="chart-tip" id="signupTip"></div>
+    </div>
+  </section>
+
+  <section id="money" data-view-section="money" aria-labelledby="moneyTitle" hidden>
+    <div class="card">
+      <div class="toolbar">
+        <div>
+          <div class="section-title" id="moneyTitle" style="margin-bottom:3px;">💰 Money</div>
+          <div class="muted" id="moneySynced"></div>
+        </div>
+        <div class="pager">
+          <button type="button" class="btn-ghost" id="moneyRefresh">Refresh</button>
+          <button type="button" class="btn-primary" id="moneySync">Sync with stores</button>
+        </div>
       </div>
-      <div style="flex:0 0 auto;">
-        <button type="button" class="btn-primary" id="saveKey">Save &amp; Load</button>
+      <div class="filters">
+        <div><label>Store</label><div class="seg" id="moneyPlatform"><button type="button" data-v="all" class="active">All</button><button type="button" data-v="android">Android</button><button type="button" data-v="ios">iOS</button></div></div>
+        <div><label>Chart by</label><div class="seg" id="moneyGranularity"><button type="button" data-v="day" class="active">Daily</button><button type="button" data-v="month">Monthly</button><button type="button" data-v="year">Yearly</button></div></div>
+        <div><label for="moneyRange">Period</label><select id="moneyRange"></select></div>
+        <div><label for="moneyCurrency">Currency</label><select id="moneyCurrency"><option value="">&ndash;</option></select></div>
+        <div><label for="moneyMetric">Show</label><select id="moneyMetric"><option value="gross">Customer paid</option><option value="net">Your earnings</option></select></div>
+        <div><label class="check"><input type="checkbox" id="moneyTest" /> Include test purchases</label></div>
+      </div>
+      <div id="moneyStatus" class="status-line" aria-live="polite"></div>
+    </div>
+    <div class="stats" id="moneyQuick"></div>
+    <div class="card">
+      <div class="toolbar">
+        <div class="section-title" style="margin:0;" id="moneyChartTitle">Earnings</div>
+        <div class="legend"><span><span class="swatch" style="background:#2e9e5b"></span>Android</span><span><span class="swatch" style="background:#7838FE"></span>iOS</span></div>
+      </div>
+      <div class="chart-wrap" id="moneyChart"></div>
+      <div class="chart-tip" id="moneyTip">Hover a bar for details.</div>
+    </div>
+    <div class="stats" id="moneyTotals"></div>
+    <div class="card">
+      <div class="section-title">Recent payments</div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Date</th><th>Store</th><th>Type</th><th class="hide-sm">User</th><th class="num">Paid</th><th class="num">Your share</th><th>Status</th></tr></thead>
+          <tbody id="moneyRecent"><tr><td colspan="7" class="muted">Loading…</td></tr></tbody>
+        </table>
       </div>
     </div>
-    <div id="status" style="margin-top:10px;" aria-live="polite"></div>
-  </div>
+    <div class="card">
+      <p class="note"><strong>Customer paid</strong> is what buyers were charged, including tax, minus refunds. <strong>Your earnings</strong> is your share after the store fee and tax.</p>
+      <p class="note"><strong>Google Play</strong> figures come from the Play Orders API and are exact. <strong>App Store</strong> earnings are estimated as price minus 15%, because Apple does not report your share per transaction (prices in some countries also include tax, so the real amount can be lower).</p>
+      <p class="note">New payments are recorded automatically. Use <strong>Sync with stores</strong> to import older purchases or refresh refunds. Your official payouts are in Play Console and App Store Connect.</p>
+    </div>
+  </section>
 
-  <section class="card primary" id="reports" aria-labelledby="reportsTitle">
+  <section class="card primary" id="reports" data-view-section="reports" aria-labelledby="reportsTitle" hidden>
     <div class="toolbar">
       <div>
         <div class="section-title" id="reportsTitle" style="margin-bottom:3px;">🚩 Moderation queue</div>
@@ -244,7 +414,7 @@ module.exports = `<!doctype html>
       <span>The queue has changed since this list was loaded.</span>
       <button type="button" class="btn-primary btn-sm" id="reportStaleRefresh">Refresh list</button>
     </div>
-    <div id="reportList"><div class="empty">Enter your admin key and click Save &amp; Load.</div></div>
+    <div id="reportList"><div class="empty">Loading…</div></div>
     <div class="pager pager-bottom">
       <button type="button" class="btn-ghost report-prev">&lsaquo; Prev</button>
       <span class="muted report-page-info">&ndash;</span>
@@ -252,7 +422,7 @@ module.exports = `<!doctype html>
     </div>
   </section>
 
-  <section class="card" id="users" aria-labelledby="usersTitle">
+  <section class="card" id="users" data-view-section="users" aria-labelledby="usersTitle" hidden>
     <div class="toolbar">
       <div>
         <div class="section-title" id="usersTitle" style="margin-bottom:3px;">👥 Users</div>
@@ -274,12 +444,12 @@ module.exports = `<!doctype html>
         <thead>
           <tr><th>User</th><th>Share code</th><th>Plan</th><th>Status</th><th>Actions</th></tr>
         </thead>
-        <tbody id="rows"><tr><td colspan="5" class="muted">Enter your admin key and click “Save &amp; Load”.</td></tr></tbody>
+        <tbody id="rows"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody>
       </table>
     </div>
   </section>
 
-  <section class="card" id="settings">
+  <section class="card" id="settings" data-view-section="settings" hidden>
     <div class="section-title">⚙️ Play Settings</div>
     <div class="settings-row">
       <div>
@@ -297,13 +467,74 @@ module.exports = `<!doctype html>
       </div>
     </div>
     <div id="settingsStatus"></div>
+    <div class="readonly-note" id="settingsReadonly" hidden>Only an owner can change these settings.</div>
   </section>
+
+  <section class="card" id="admins" data-view-section="admins" aria-labelledby="adminsTitle" hidden>
+    <div class="toolbar">
+      <div>
+        <div class="section-title" id="adminsTitle" style="margin-bottom:3px;">🔑 Admin accounts</div>
+        <div class="muted">Owners can do everything. Moderators can handle reports and ban or unban users, but cannot see money, give Pro, delete accounts or change settings.</div>
+      </div>
+      <button type="button" class="btn-primary" id="addAdminBtn">Add admin</button>
+    </div>
+    <div id="adminsStatus" class="status-line" aria-live="polite"></div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Admin</th><th>Role</th><th>Status</th><th class="hide-sm">Last sign-in</th><th>Actions</th></tr></thead>
+        <tbody id="adminRows"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card" id="activity" data-view-section="activity" aria-labelledby="activityTitle" hidden>
+    <div class="toolbar">
+      <div>
+        <div class="section-title" id="activityTitle" style="margin-bottom:3px;">🧾 Activity log</div>
+        <div class="muted" id="activitySummary">Every admin action, newest first.</div>
+      </div>
+      <div class="pager">
+        <select id="activityFilter" aria-label="Filter actions">
+          <option value="">All actions</option>
+          <option value="auth.">Sign-ins</option>
+          <option value="user.">Users</option>
+          <option value="report.">Reports</option>
+          <option value="config.">Settings</option>
+          <option value="admin.">Admin accounts</option>
+          <option value="revenue.">Money</option>
+        </select>
+        <button type="button" class="btn-ghost" id="activityPrev">&lsaquo; Prev</button>
+        <span class="muted" id="activityPage">&ndash;</span>
+        <button type="button" class="btn-ghost" id="activityNext">Next &rsaquo;</button>
+      </div>
+    </div>
+    <div id="activityStatus" class="status-line" aria-live="polite"></div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>When</th><th>Admin</th><th>What happened</th><th class="hide-sm">IP</th></tr></thead>
+        <tbody id="activityRows"><tr><td colspan="4" class="muted">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+</div>
+</div>
+
+<div class="modal-backdrop" id="drawer" hidden>
+  <div class="modal wide" id="drawerDialog" role="dialog" aria-modal="true" aria-labelledby="drawerTitle" tabindex="-1">
+    <div class="toolbar" style="margin-bottom:0;">
+      <h2 id="drawerTitle" style="margin:0;">User</h2>
+      <button type="button" class="btn-ghost btn-sm" id="drawerClose">Close</button>
+    </div>
+    <div id="drawerStatus" class="status-line" aria-live="polite"></div>
+    <div id="drawerBody"></div>
+  </div>
 </div>
 
 <div class="modal-backdrop" id="modal" hidden>
   <div class="modal" id="modalDialog" role="dialog" aria-modal="true" aria-labelledby="modalTitle" aria-describedby="modalBody" tabindex="-1">
     <h2 id="modalTitle"></h2>
     <div class="modal-body" id="modalBody"></div>
+    <div class="modal-fields" id="modalFields"></div>
     <div id="modalField" hidden>
       <label for="modalInput" id="modalInputLabel"></label>
       <textarea id="modalInput" rows="3" maxlength="500"></textarea>
@@ -324,7 +555,12 @@ module.exports = `<!doctype html>
   var state = { page: 1, limit: 25, search: '', pages: 1, seq: 0, byId: Object.create(null) };
   var reportState = { page: 1, limit: 25, pages: 1, status: 'open', seq: 0, loading: false, byId: Object.create(null), listOpenCount: null };
   var counterState = { busy: false, lastAt: 0 };
-  var memoryKey = '';
+  var SESSION_KEY = 'hamme_admin_session';
+  var memorySession = null;
+  var currentView = null;
+  var TZ = (function () {
+    try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (e) { return 'UTC'; }
+  })();
   var $ = function (id) { return document.getElementById(id); };
   var each = function (list, fn) { Array.prototype.forEach.call(list, fn); };
 
@@ -354,19 +590,27 @@ module.exports = `<!doctype html>
     account_deleted: 'Closed automatically: account deleted'
   };
 
-  function getKey() {
-    try { return localStorage.getItem('hamme_admin_key') || memoryKey; } catch (e) { return memoryKey; }
+  // ── Session ───────────────────────────────────────────────────────────────
+  // { token, admin: { id, email, name, role } } from POST /auth/login.
+  function getSession() {
+    try {
+      var raw = localStorage.getItem(SESSION_KEY);
+      return raw ? JSON.parse(raw) : memorySession;
+    } catch (e) { return memorySession; }
   }
-  function setKey(v) {
-    memoryKey = v;
-    try { localStorage.setItem('hamme_admin_key', v); } catch (e) {}
+  function setSession(s) {
+    memorySession = s;
+    try {
+      if (s) localStorage.setItem(SESSION_KEY, JSON.stringify(s));
+      else localStorage.removeItem(SESSION_KEY);
+    } catch (e) {}
   }
+  function signedIn() { var s = getSession(); return !!(s && s.token); }
+  function isOwner() { var s = getSession(); return !!(s && s.admin && s.admin.role === 'owner'); }
+  // The old shared-key login stored the raw key in the browser: remove it.
+  try { localStorage.removeItem('hamme_admin_key'); } catch (e) {}
 
-  function setStatus(msg, kind) {
-    var el = $('status');
-    el.textContent = msg || '';
-    el.className = kind || '';
-  }
+  function setStatus(msg, kind) { setLine('status', msg, kind); }
   function setLine(id, msg, kind) {
     var el = $(id);
     el.textContent = msg || '';
@@ -420,7 +664,10 @@ module.exports = `<!doctype html>
 
   async function api(path, options) {
     options = options || {};
-    options.headers = Object.assign({ 'x-admin-key': getKey(), 'Content-Type': 'application/json' }, options.headers || {});
+    var headers = { 'Content-Type': 'application/json' };
+    var s = getSession();
+    if (s && s.token) headers.Authorization = 'Bearer ' + s.token;
+    options.headers = Object.assign(headers, options.headers || {});
     var res;
     try {
       res = await fetch(API_BASE + path, options);
@@ -433,14 +680,15 @@ module.exports = `<!doctype html>
       // Only the user-facing message is shown; the error details are never relied on.
       var err = new Error((data && data.message) || ('Request failed (' + res.status + ')'));
       err.status = res.status;
+      // An expired or revoked session sends the admin back to the sign-in screen.
+      if (res.status === 401 && path.indexOf('/auth/') !== 0 && signedIn()) signOut(err.message);
       throw err;
     }
     return data || {};
   }
 
-  // Surface a bad/missing admin key next to the key input.
   function noteAuthError(e) {
-    if (e && (e.status === 401 || e.status === 503)) setStatus(e.message, 'err');
+    if (e && e.status === 503) setStatus(e.message, 'err');
   }
 
   // ── Time helpers ──────────────────────────────────────────────────────────
@@ -499,6 +747,12 @@ module.exports = `<!doctype html>
       '<div class="who"><div class="who-name">' + escapeHtml(u.name || 'Unnamed user') + '</div>' + lines + '</div></div>';
   }
 
+  function proSource(u) {
+    var store = u.storeProActive ? (u.proPlatform === 'ios' ? 'APP STORE' : 'PLAY') : '';
+    if (store && u.adminPro) return store + ' + ADMIN';
+    return store || (u.adminPro ? 'ADMIN' : 'LEGACY');
+  }
+
   function render(data) {
     var tbody = $('rows');
     var users = Array.isArray(data.users) ? data.users : [];
@@ -519,9 +773,9 @@ module.exports = `<!doctype html>
       var idAttr = escapeHtml(id);
       var adminPro = !!u.adminPro;
       var storePro = !!u.storeProActive;
-      var source = storePro && adminPro ? 'PLAY + ADMIN' : storePro ? 'PLAY' : adminPro ? 'ADMIN' : 'LEGACY';
-      var badge = u.isPro ? '<span class="badge pro">PRO · ' + source + '</span>' : '<span class="badge free">FREE</span>';
-      var planBtn = adminPro
+      var badge = u.isPro ? '<span class="badge pro">PRO · ' + proSource(u) + '</span>' : '<span class="badge free">FREE</span>';
+      var viewBtn = '<button type="button" class="btn-ghost btn-sm" data-id="' + idAttr + '" data-view-user>View</button>';
+      var planBtn = !isOwner() ? '' : adminPro
         ? '<button type="button" class="btn-danger btn-sm" data-id="' + idAttr + '" data-pro="false">Remove admin grant</button>'
         : '<button type="button" class="btn-primary btn-sm" data-id="' + idAttr + '" data-pro="true">Grant Pro</button>';
       var banBtn = u.isBanned
@@ -537,13 +791,13 @@ module.exports = `<!doctype html>
         '<td data-label="Share code"><span class="muted">' + escapeHtml(u.shareCode || '') + '</span></td>' +
         '<td data-label="Plan">' + badge + '</td>' +
         '<td data-label="Status"><div>' + statusHtml + '</div></td>' +
-        '<td><div class="btn-group">' + planBtn + banBtn + '</div></td>' +
+        '<td><div class="btn-group">' + viewBtn + planBtn + banBtn + '</div></td>' +
       '</tr>';
     }).join('');
   }
 
   async function load() {
-    if (!getKey()) { setStatus('Enter your admin key first.', 'err'); return; }
+    if (!signedIn()) return;
     var seq = ++state.seq;
     setUserStatus('Loading…');
     try {
@@ -565,6 +819,7 @@ module.exports = `<!doctype html>
       await api('/users/' + encodeURIComponent(id) + '/plan', { method: 'PATCH', body: JSON.stringify({ isPro: isPro }) });
       setUserStatus(isPro ? 'Admin Pro grant added.' : 'Admin Pro grant removed.', 'ok');
       load();
+      if (drawerState.userId === id) openUserDetail(id);
     } catch (e) {
       setUserStatus(e.message, 'err');
     }
@@ -589,6 +844,7 @@ module.exports = `<!doctype html>
         setUserStatus(who + ' has been banned.', 'ok');
         load();
         loadReports();
+        if (drawerState.userId === u.id) openUserDetail(u.id);
       }
     });
   }
@@ -610,6 +866,7 @@ module.exports = `<!doctype html>
         setUserStatus(who + ' has been unbanned.', 'ok');
         load();
         loadReports();
+        if (drawerState.userId === u.id) openUserDetail(u.id);
       }
     });
   }
@@ -619,8 +876,7 @@ module.exports = `<!doctype html>
     $('search').value = term;
     state.search = term;
     state.page = 1;
-    load();
-    $('users').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    showView('users');
   }
 
   // ── Reports / moderation queue ────────────────────────────────────────────
@@ -792,7 +1048,7 @@ module.exports = `<!doctype html>
   }
 
   async function loadReports() {
-    if (!getKey()) return;
+    if (!signedIn()) return;
     var seq = ++reportState.seq;
     reportState.loading = true;
     $('reportSummary').textContent = 'Loading reports…';
@@ -823,7 +1079,7 @@ module.exports = `<!doctype html>
 
   // Lightweight poll: only the counters (limit=1), never re-renders the list.
   async function refreshCounters() {
-    if (!getKey() || counterState.busy || document.hidden) return;
+    if (!signedIn() || counterState.busy || document.hidden) return;
     counterState.busy = true;
     try {
       var data = await api('/reports?status=open&page=1&limit=1');
@@ -1011,6 +1267,37 @@ module.exports = `<!doctype html>
       w.textContent = opts.warning;
       body.appendChild(w);
     }
+    // Optional form fields: [{ name, label, type, placeholder, options: [[value, label]], value }].
+    var fieldsEl = $('modalFields');
+    fieldsEl.textContent = '';
+    (opts.fields || []).forEach(function (f, i) {
+      var wrap = document.createElement('div');
+      wrap.className = 'field';
+      var label = document.createElement('label');
+      label.textContent = f.label;
+      label.htmlFor = 'mf_' + i;
+      var input;
+      if (f.type === 'select') {
+        input = document.createElement('select');
+        (f.options || []).forEach(function (o) {
+          var opt = document.createElement('option');
+          opt.value = o[0];
+          opt.textContent = o[1];
+          input.appendChild(opt);
+        });
+      } else {
+        input = document.createElement('input');
+        input.type = f.type || 'text';
+        input.placeholder = f.placeholder || '';
+        input.autocomplete = f.autocomplete || 'off';
+      }
+      input.id = 'mf_' + i;
+      input.setAttribute('data-name', f.name);
+      if (f.value != null) input.value = f.value;
+      wrap.appendChild(label);
+      wrap.appendChild(input);
+      fieldsEl.appendChild(wrap);
+    });
     $('modalField').hidden = !opts.inputLabel;
     $('modalInputLabel').textContent = opts.inputLabel || '';
     $('modalInput').value = '';
@@ -1024,13 +1311,23 @@ module.exports = `<!doctype html>
     $('modalCancel').disabled = false;
     $('modal').hidden = false;
     document.body.classList.add('modal-open');
-    $('modalDialog').focus();
+    var firstField = fieldsEl.querySelector('input, select');
+    if (firstField) firstField.focus(); else $('modalDialog').focus();
+  }
+
+  function modalValues() {
+    var values = {};
+    each($('modalFields').querySelectorAll('[data-name]'), function (el) {
+      values[el.getAttribute('data-name')] = el.type === 'password' ? el.value : el.value.trim();
+    });
+    return values;
   }
 
   function closeModal() {
     if (!modal.opts || modal.busy) return;
     $('modal').hidden = true;
-    document.body.classList.remove('modal-open');
+    $('modalFields').textContent = '';
+    if ($('drawer').hidden) document.body.classList.remove('modal-open');
     var back = modal.returnFocus;
     modal.opts = null;
     modal.returnFocus = null;
@@ -1042,13 +1339,14 @@ module.exports = `<!doctype html>
     $('modalConfirm').disabled = busy;
     $('modalCancel').disabled = busy;
     $('modalInput').disabled = busy;
+    each($('modalFields').querySelectorAll('[data-name]'), function (el) { el.disabled = busy; });
     $('modalConfirm').textContent = busy ? 'Working…' : (modal.opts && modal.opts.confirmLabel) || 'Confirm';
   }
 
   async function confirmModal() {
     var opts = modal.opts;
     if (!opts || modal.busy) return;
-    var value = opts.inputLabel ? $('modalInput').value.trim() : '';
+    var value = opts.fields ? modalValues() : opts.inputLabel ? $('modalInput').value.trim() : '';
     $('modalError').textContent = '';
     setModalBusy(true);
     try {
@@ -1072,12 +1370,16 @@ module.exports = `<!doctype html>
     backdropDown = false;
   });
   document.addEventListener('keydown', function (e) {
-    if (!modal.opts) return;
+    if (!modal.opts) {
+      if (e.key === 'Escape' && !$('drawer').hidden) { e.preventDefault(); closeDrawer(); }
+      return;
+    }
     if (e.key === 'Escape') { e.preventDefault(); closeModal(); return; }
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); confirmModal(); return; }
+    if (e.key === 'Enter' && e.target && e.target.tagName === 'INPUT') { e.preventDefault(); confirmModal(); return; }
     if (e.key !== 'Tab') return;
     var dialog = $('modalDialog');
-    var focusables = Array.prototype.filter.call(dialog.querySelectorAll('button, textarea'), function (el) {
+    var focusables = Array.prototype.filter.call(dialog.querySelectorAll('button, textarea, input, select'), function (el) {
       return !el.disabled && el.offsetParent !== null;
     });
     if (!focusables.length) { e.preventDefault(); return; }
@@ -1088,22 +1390,149 @@ module.exports = `<!doctype html>
     else if (!e.shiftKey && (active === last || !dialog.contains(active))) { e.preventDefault(); first.focus(); }
   });
 
-  // ── Wiring ────────────────────────────────────────────────────────────────
-  function saveAndLoad() {
-    var key = $('adminKey').value.trim();
-    setKey(key);
-    if (!key) { setStatus('Enter your admin key first.', 'err'); return; }
-    setStatus('Key saved.', 'ok');
-    state.page = 1;
-    reportState.page = 1;
-    load();
-    loadSettings();
-    loadReports();
+  // ── Sign-in & navigation ──────────────────────────────────────────────────
+  var VIEWS = ['overview', 'money', 'reports', 'users', 'settings', 'admins', 'activity'];
+  var OWNER_VIEWS = { money: true, admins: true, activity: true };
+  var VIEW_LOADERS = {
+    overview: function () { loadOverview(); },
+    money: function () { loadMoney(); },
+    reports: function () { loadReports(); },
+    users: function () { load(); },
+    settings: function () { loadSettings(); },
+    admins: function () { loadAdmins(); },
+    activity: function () { loadActivity(); }
+  };
+
+  function showView(name, skipHash) {
+    if (VIEWS.indexOf(name) < 0 || (OWNER_VIEWS[name] && !isOwner())) {
+      name = 'overview';
+      skipHash = false;
+    }
+    currentView = name;
+    each(document.querySelectorAll('[data-view-section]'), function (s) {
+      s.hidden = s.getAttribute('data-view-section') !== name;
+    });
+    each(document.querySelectorAll('#nav [data-view]'), function (b) {
+      var on = b.getAttribute('data-view') === name;
+      b.classList.toggle('active', on);
+      if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+    });
+    if (!skipHash && location.hash !== '#' + name) history.replaceState(null, '', '#' + name);
+    setStatus('');
+    VIEW_LOADERS[name]();
+    window.scrollTo(0, 0);
   }
 
-  $('saveKey').addEventListener('click', saveAndLoad);
-  $('adminKey').addEventListener('keydown', function (e) {
-    if (e.key === 'Enter') saveAndLoad();
+  function showApp() {
+    var s = getSession();
+    $('authView').hidden = true;
+    $('appView').hidden = false;
+    $('meName').textContent = (s.admin && (s.admin.name || s.admin.email)) || 'Admin';
+    $('meRole').textContent = s.admin && s.admin.role === 'owner' ? 'Owner' : 'Moderator';
+    $('changePasswordBtn').hidden = !(s.admin && s.admin.id);
+    each(document.querySelectorAll('#nav [data-owner]'), function (b) { b.hidden = !isOwner(); });
+    $('settingsReadonly').hidden = isOwner();
+    $('saveSettings').hidden = !isOwner();
+    $('cardLimit').disabled = !isOwner();
+    $('cooldownMinutes').disabled = !isOwner();
+    refreshCounters();
+    showView((location.hash || '').slice(1) || 'overview', true);
+  }
+
+  async function showAuth(message) {
+    $('appView').hidden = true;
+    $('authView').hidden = false;
+    var needsBootstrap = false;
+    try {
+      needsBootstrap = !!(await api('/auth/status')).needsBootstrap;
+    } catch (e) {
+      setLine('loginStatus', e.message, 'err');
+    }
+    $('bootstrapForm').hidden = !needsBootstrap;
+    $('loginForm').hidden = needsBootstrap;
+    if (message && !needsBootstrap) setLine('loginStatus', message, 'err');
+    (needsBootstrap ? $('bootKey') : $('loginEmail')).focus();
+  }
+
+  function signOut(message) {
+    setSession(null);
+    closeDrawer();
+    if (modal.opts) { modal.busy = false; closeModal(); }
+    showAuth(message || '');
+  }
+
+  $('loginForm').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var email = $('loginEmail').value.trim();
+    var password = $('loginPassword').value;
+    if (!email || !password) { setLine('loginStatus', 'Enter your email and password.', 'err'); return; }
+    $('loginBtn').disabled = true;
+    setLine('loginStatus', 'Signing in…');
+    try {
+      var s = await api('/auth/login', { method: 'POST', body: JSON.stringify({ email: email, password: password }) });
+      setSession(s);
+      $('loginPassword').value = '';
+      setLine('loginStatus', '');
+      showApp();
+    } catch (err) {
+      setLine('loginStatus', err.message, 'err');
+    } finally {
+      $('loginBtn').disabled = false;
+    }
+  });
+
+  $('bootstrapForm').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var key = $('bootKey').value;
+    var body = { name: $('bootName').value.trim(), email: $('bootEmail').value.trim(), password: $('bootPassword').value };
+    if (!key || !body.name || !body.email || !body.password) { setLine('bootStatus', 'Fill in every field.', 'err'); return; }
+    if (body.password.length < 10) { setLine('bootStatus', 'Use a password of at least 10 characters.', 'err'); return; }
+    $('bootBtn').disabled = true;
+    setLine('bootStatus', 'Creating account…');
+    try {
+      var s = await api('/auth/bootstrap', { method: 'POST', headers: { 'x-admin-key': key }, body: JSON.stringify(body) });
+      setSession(s);
+      $('bootKey').value = '';
+      $('bootPassword').value = '';
+      showApp();
+    } catch (err) {
+      setLine('bootStatus', err.message, 'err');
+    } finally {
+      $('bootBtn').disabled = false;
+    }
+  });
+
+  $('signOutBtn').addEventListener('click', function () { signOut(''); });
+  $('changePasswordBtn').addEventListener('click', function () {
+    openModal({
+      title: 'Change your password',
+      body: ['You stay signed in here. Other devices signed in to your account are signed out.'],
+      fields: [
+        { name: 'current', label: 'Current password', type: 'password', autocomplete: 'current-password' },
+        { name: 'next', label: 'New password (at least 10 characters)', type: 'password', autocomplete: 'new-password' },
+        { name: 'repeat', label: 'Repeat new password', type: 'password', autocomplete: 'new-password' }
+      ],
+      confirmLabel: 'Change password',
+      danger: false,
+      onConfirm: function (v) {
+        if (!v.current || !v.next) throw new Error('Fill in every field.');
+        if (v.next.length < 10) throw new Error('Use a password of at least 10 characters.');
+        if (v.next !== v.repeat) throw new Error('The new passwords do not match.');
+        return api('/auth/password', { method: 'POST', body: JSON.stringify({ currentPassword: v.current, newPassword: v.next }) });
+      },
+      onSuccess: function (s) {
+        if (s && s.token) setSession(s);
+        setStatus('Password changed.', 'ok');
+      }
+    });
+  });
+
+  each(document.querySelectorAll('#nav [data-view]'), function (b) {
+    b.addEventListener('click', function () { showView(b.getAttribute('data-view')); });
+  });
+  window.addEventListener('hashchange', function () {
+    var name = (location.hash || '').slice(1);
+    if (signedIn() && name && name !== currentView) showView(name, true);
   });
 
   var searchTimer = null;
@@ -1127,6 +1556,7 @@ module.exports = `<!doctype html>
     var b = e.target.closest ? e.target.closest('button[data-id]') : null;
     if (!b || b.disabled) return;
     var id = b.getAttribute('data-id');
+    if (b.hasAttribute('data-view-user')) { openUserDetail(id); return; }
     if (b.hasAttribute('data-pro')) { setPlan(id, b.getAttribute('data-pro') === 'true'); return; }
     var u = state.byId[id];
     if (!u) return;
@@ -1195,7 +1625,7 @@ module.exports = `<!doctype html>
   }
 
   async function loadSettings() {
-    if (!getKey()) return;
+    if (!signedIn()) return;
     try {
       var data = await api('/config');
       if (data && data.config) {
@@ -1208,7 +1638,7 @@ module.exports = `<!doctype html>
   }
 
   $('saveSettings').addEventListener('click', async function () {
-    if (!getKey()) { setSettingsStatus('Enter your admin key first.', 'err'); return; }
+    if (!isOwner()) { setSettingsStatus('Only an owner can change these settings.', 'err'); return; }
     var cardLimit = parseInt($('cardLimit').value, 10);
     var cooldown = parseInt($('cooldownMinutes').value, 10);
     if (!cardLimit || cardLimit < 1) { setSettingsStatus('Card limit must be at least 1.', 'err'); return; }
@@ -1222,9 +1652,756 @@ module.exports = `<!doctype html>
     }
   });
 
-  // Restore saved key on open.
-  $('adminKey').value = getKey();
-  if (getKey()) { load(); loadSettings(); loadReports(); }
+  // ── Formatting & charts ───────────────────────────────────────────────────
+  var ANDROID_COLOR = '#2e9e5b';
+  var IOS_COLOR = '#7838FE';
+
+  function fmtInt(v) { return (Number(v) || 0).toLocaleString(); }
+  function fmtMoney(v, currency) {
+    if (v == null || !isFinite(v)) return '\\u2013';
+    try {
+      return new Intl.NumberFormat(undefined, { style: 'currency', currency: currency || 'USD', maximumFractionDigits: 2 }).format(v);
+    } catch (e) {
+      return (currency ? currency + ' ' : '') + Number(v).toFixed(2);
+    }
+  }
+  function fmtMoneyShort(v, currency) {
+    try {
+      return new Intl.NumberFormat(undefined, { style: 'currency', currency: currency || 'USD', notation: 'compact', maximumFractionDigits: 1 }).format(v);
+    } catch (e) {
+      return fmtMoney(v, currency);
+    }
+  }
+  function pad2(n) { return n < 10 ? '0' + n : String(n); }
+  function niceMax(v) {
+    if (!(v > 0)) return 1;
+    var p = Math.pow(10, Math.floor(Math.log(v) / Math.LN10));
+    var m = v / p;
+    return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 2.5 ? 2.5 : m <= 5 ? 5 : 10) * p;
+  }
+  function r1(n) { return Math.round(n * 10) / 10; }
+
+  // Stacked bar chart as inline SVG. buckets: [{ key, label, title }],
+  // stacks: [{ name, color, values: [] }], fmt(value, isAxis) formats numbers.
+  var charts = Object.create(null);
+  function barChart(el, tipEl, buckets, stacks, fmt, wholeNumbers) {
+    charts[el.id] = { buckets: buckets, stacks: stacks, fmt: fmt, tipEl: tipEl, wholeNumbers: wholeNumbers };
+    // Drawn at the container's real width so labels stay readable on phones.
+    var W = Math.round(Math.max(300, Math.min(760, el.clientWidth || 760)));
+    var narrow = W < 500;
+    var H = narrow ? 210 : 250, L = narrow ? 52 : 64, R = 8, T = 10, B = 30;
+    var n = Math.max(buckets.length, 1);
+    var totals = buckets.map(function (_, i) {
+      return stacks.reduce(function (sum, st) { return sum + (st.values[i] || 0); }, 0);
+    });
+    var max = niceMax(Math.max.apply(null, totals.concat([0])));
+    // Counts get whole-number gridlines (4 equal integer steps).
+    if (wholeNumbers) max = Math.max(1, Math.ceil(max / 4)) * 4;
+    var pw = W - L - R, ph = H - T - B, slot = pw / n, bw = Math.max(2, Math.min(34, slot * 0.68));
+    var out = '';
+    for (var k = 0; k <= 4; k++) {
+      var gy = r1(T + ph - ph * k / 4);
+      out += '<line class="grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + gy + '" y2="' + gy + '"/>' +
+        '<text x="' + (L - 6) + '" y="' + (gy + 4) + '" text-anchor="end">' + escapeHtml(fmt(max * k / 4, true)) + '</text>';
+    }
+    var step = Math.ceil(n / (narrow ? 5 : 12));
+    buckets.forEach(function (b, i) {
+      var x = L + slot * i;
+      var bx = r1(x + (slot - bw) / 2);
+      var y = T + ph;
+      out += '<g class="bar-col" data-i="' + i + '"><rect class="hit" x="' + r1(x) + '" y="' + T + '" width="' + r1(slot) + '" height="' + ph + '"/>';
+      stacks.forEach(function (st) {
+        var v = st.values[i] || 0;
+        if (v <= 0) return;
+        var h = Math.max(1, ph * v / max);
+        y -= h;
+        out += '<rect x="' + bx + '" y="' + r1(y) + '" width="' + r1(bw) + '" height="' + r1(h) + '" rx="2" fill="' + st.color + '"/>';
+      });
+      out += '</g>';
+      if (i % step === 0) {
+        out += '<text x="' + r1(x + slot / 2) + '" y="' + (H - 10) + '" text-anchor="middle">' + escapeHtml(b.label) + '</text>';
+      }
+    });
+    el.innerHTML = '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Bar chart">' + out + '</svg>';
+  }
+
+  function chartHover(e) {
+    var col = e.target.closest ? e.target.closest('.bar-col') : null;
+    var chart = charts[this.id];
+    if (!col || !chart) return;
+    var i = Number(col.getAttribute('data-i'));
+    var b = chart.buckets[i];
+    var parts = [];
+    var total = 0;
+    chart.stacks.forEach(function (st) {
+      var v = st.values[i] || 0;
+      total += v;
+      if (chart.stacks.length > 1) parts.push(st.name + ' ' + chart.fmt(v, false));
+    });
+    chart.tipEl.textContent = b.title + ': ' + chart.fmt(total, false) + (parts.length ? ' (' + parts.join(' \\u00b7 ') + ')' : '');
+  }
+  each([$('moneyChart'), $('signupChart')], function (el) {
+    el.addEventListener('mouseover', chartHover);
+    el.addEventListener('click', chartHover);
+  });
+  // Redraw at the new width after rotating a phone or resizing the window.
+  var resizeTimer = null;
+  window.addEventListener('resize', function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () {
+      Object.keys(charts).forEach(function (id) {
+        var c = charts[id];
+        var el = $(id);
+        if (el && el.offsetParent !== null) barChart(el, c.tipEl, c.buckets, c.stacks, c.fmt, c.wholeNumbers);
+      });
+    }, 200);
+  });
+
+  // Local-time chart buckets, matching the server's grouping in the same time zone.
+  function bucketKey(gran, d) {
+    if (gran === 'year') return String(d.getFullYear());
+    if (gran === 'month') return d.getFullYear() + '-' + pad2(d.getMonth() + 1);
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+  }
+  function periodStart(gran, count) {
+    var now = new Date();
+    if (gran === 'year') return new Date(now.getFullYear() - (count - 1), 0, 1);
+    if (gran === 'month') return new Date(now.getFullYear(), now.getMonth() - (count - 1), 1);
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate() - (count - 1));
+  }
+  function bucketList(gran, start) {
+    var list = [];
+    var d = new Date(start.getTime());
+    var now = new Date();
+    while (d <= now && list.length < 400) {
+      var label, title;
+      if (gran === 'year') { label = title = String(d.getFullYear()); }
+      else if (gran === 'month') {
+        label = d.toLocaleDateString(undefined, { month: 'short', year: '2-digit' });
+        title = d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+      } else {
+        label = d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+        title = d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+      }
+      list.push({ key: bucketKey(gran, d), label: label, title: title });
+      if (gran === 'year') d = new Date(d.getFullYear() + 1, 0, 1);
+      else if (gran === 'month') d = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+      else d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+    }
+    return list;
+  }
+
+  function statCard(label, value, sub, opts) {
+    opts = opts || {};
+    var cls = 'stat' + (opts.alarm ? ' alarm' : '');
+    var inner = '<div class="stat-label">' + escapeHtml(label) + '</div>' +
+      '<div class="stat-value">' + escapeHtml(value) + '</div>' +
+      (sub ? '<div class="stat-sub">' + (opts.subHtml ? sub : escapeHtml(sub)) + '</div>' : '');
+    if (opts.view) return '<button type="button" class="' + cls + '" data-goto="' + escapeHtml(opts.view) + '">' + inner + '</button>';
+    return '<div class="' + cls + '">' + inner + '</div>';
+  }
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('[data-goto]') : null;
+    if (b) showView(b.getAttribute('data-goto'));
+  });
+
+  // ── Overview ──────────────────────────────────────────────────────────────
+  var overviewSeq = 0;
+  async function loadOverview() {
+    var seq = ++overviewSeq;
+    try {
+      var d = await api('/stats?tz=' + encodeURIComponent(TZ));
+      if (seq !== overviewSeq) return;
+      var u = d.users || {}, pro = d.pro || {}, act = d.activity || {}, rep = d.reports || {};
+      var cards = [
+        statCard('Users', fmtInt(u.total), '+' + fmtInt(u.new1d) + ' today \\u00b7 +' + fmtInt(u.new7d) + ' this week \\u00b7 +' + fmtInt(u.new30d) + ' in 30 days', { view: 'users' }),
+        statCard('Pro members', fmtInt(pro.total), 'Google Play ' + fmtInt(pro.android) + ' \\u00b7 App Store ' + fmtInt(pro.ios) + ' \\u00b7 free grants ' + fmtInt(pro.admin), { view: 'users' }),
+        statCard('Open reports', fmtInt(rep.open), rep.overdue ? fmtInt(rep.overdue) + ' past the 24-hour deadline' : 'None overdue', { alarm: rep.overdue > 0, view: 'reports' }),
+        statCard('Votes this week', fmtInt(act.votes7d), fmtInt(act.matches7d) + ' new matches this week'),
+        statCard('Banned / guests', fmtInt(u.banned) + ' / ' + fmtInt(u.guests), 'Banned accounts \\u00b7 guest accounts')
+      ];
+      if (isOwner()) {
+        var rev = d.revenue30d || [];
+        cards.splice(2, 0, rev.length
+          ? statCard('Earnings \\u00b7 30 days', fmtMoney(rev[0].gross, rev[0].currency),
+            'Your share \\u2248 ' + fmtMoney(rev[0].net, rev[0].currency) + ' \\u00b7 ' + fmtInt(rev[0].count) + ' payments' +
+            (rev.length > 1 ? ' \\u00b7 also ' + rev.slice(1).map(function (r) { return fmtMoney(r.gross, r.currency); }).join(', ') : ''), { view: 'money' })
+          : statCard('Earnings \\u00b7 30 days', '\\u2013', 'No payments recorded yet. Open Money to sync.', { view: 'money' }));
+      }
+      $('overviewStats').innerHTML = cards.join('');
+
+      var buckets = bucketList('day', periodStart('day', 30));
+      var byDay = Object.create(null);
+      (d.signups || []).forEach(function (row) { byDay[row.day] = row.count; });
+      barChart($('signupChart'), $('signupTip'), buckets,
+        [{ name: 'Sign-ups', color: '#9E57FF', values: buckets.map(function (b) { return byDay[b.key] || 0; }) }],
+        function (v, axis) { return axis ? String(Math.round(v)) : fmtInt(v) + ' sign-up' + (v === 1 ? '' : 's'); }, true);
+      $('signupTip').textContent = 'Hover a bar for details.';
+    } catch (e) {
+      if (seq !== overviewSeq) return;
+      $('overviewStats').innerHTML = statCard('Overview', '\\u2013', e.message, { alarm: true });
+    }
+  }
+  $('overviewRefresh').addEventListener('click', loadOverview);
+
+  // ── Money ─────────────────────────────────────────────────────────────────
+  var moneyState = { platform: 'all', granularity: 'day', range: { day: 30, month: 12, year: 5 }, currency: '', includeTest: false, metric: 'gross', seq: 0, syncing: false };
+  var RANGE_OPTIONS = {
+    day: [[7, 'Last 7 days'], [30, 'Last 30 days'], [90, 'Last 90 days']],
+    month: [[6, 'Last 6 months'], [12, 'Last 12 months'], [24, 'Last 24 months']],
+    year: [[5, 'Last 5 years'], [10, 'Last 10 years']]
+  };
+  var PLATFORM_LABELS = { android: 'Android', ios: 'iOS' };
+
+  function fillRangeSelect() {
+    var sel = $('moneyRange');
+    sel.textContent = '';
+    RANGE_OPTIONS[moneyState.granularity].forEach(function (o) {
+      var opt = document.createElement('option');
+      opt.value = String(o[0]);
+      opt.textContent = o[1];
+      sel.appendChild(opt);
+    });
+    sel.value = String(moneyState.range[moneyState.granularity]);
+  }
+
+  function setSeg(id, value) {
+    each(document.querySelectorAll('#' + id + ' [data-v]'), function (b) {
+      b.classList.toggle('active', b.getAttribute('data-v') === value);
+    });
+  }
+
+  async function loadMoney() {
+    if (!isOwner()) return;
+    var seq = ++moneyState.seq;
+    var gran = moneyState.granularity;
+    var start = periodStart(gran, moneyState.range[gran]);
+    var now = new Date();
+    var q = '/revenue?platform=' + moneyState.platform +
+      '&granularity=' + gran +
+      '&from=' + encodeURIComponent(start.toISOString()) +
+      '&to=' + encodeURIComponent(new Date(now.getTime() + 60000).toISOString()) +
+      '&tz=' + encodeURIComponent(TZ) +
+      '&includeTest=' + (moneyState.includeTest ? 'true' : 'false') +
+      '&todayStart=' + encodeURIComponent(new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()) +
+      '&monthStart=' + encodeURIComponent(new Date(now.getFullYear(), now.getMonth(), 1).toISOString()) +
+      '&yearStart=' + encodeURIComponent(new Date(now.getFullYear(), 0, 1).toISOString()) +
+      (moneyState.currency ? '&currency=' + encodeURIComponent(moneyState.currency) : '');
+    if (!moneyState.syncing) setLine('moneyStatus', 'Loading…');
+    try {
+      var d = await api(q);
+      if (seq !== moneyState.seq) return;
+      renderMoney(d, start);
+      if (!moneyState.syncing) setLine('moneyStatus', d.currency ? '' : 'No payments recorded yet. Click \\u201cSync with stores\\u201d to import existing purchases from Google Play and the App Store.', d.currency ? '' : 'err');
+    } catch (e) {
+      if (seq !== moneyState.seq) return;
+      setLine('moneyStatus', e.message, 'err');
+    }
+  }
+
+  function renderMoney(d, start) {
+    var cur = d.currency || '';
+    moneyState.currency = cur;
+    var sel = $('moneyCurrency');
+    sel.textContent = '';
+    var list = (d.currencies || []).slice();
+    if (cur && !list.some(function (c) { return c.currency === cur; })) list.unshift({ currency: cur, count: 0 });
+    if (!list.length) list.push({ currency: '', count: 0 });
+    list.forEach(function (c) {
+      var opt = document.createElement('option');
+      opt.value = c.currency;
+      opt.textContent = c.currency ? c.currency + (c.count ? ' (' + c.count + ')' : '') : '\\u2013';
+      sel.appendChild(opt);
+    });
+    sel.value = cur;
+    $('moneySynced').textContent = d.lastSyncedAt ? 'Last updated from the stores ' + timeAgo(d.lastSyncedAt) : 'Not synced with the stores yet';
+
+    var m = function (v) { return fmtMoney(v, cur); };
+    var metric = moneyState.metric;
+    var quick = d.quick || {};
+    function quickCard(label, t) {
+      t = t || { gross: 0, net: 0, count: 0 };
+      var value = metric === 'net' ? t.net : t.gross;
+      var other = metric === 'net' ? 'Customer paid ' + m(t.gross) : 'Your share ' + (t.netEstimated ? '\\u2248 ' : '') + m(t.net);
+      return statCard(label, m(value), other + ' \\u00b7 ' + fmtInt(t.count) + ' payment' + (t.count === 1 ? '' : 's'));
+    }
+    $('moneyQuick').innerHTML = quickCard('Today', quick.today) + quickCard('This month', quick.month) + quickCard('This year', quick.year);
+
+    var gran = d.range && d.range.granularity || moneyState.granularity;
+    var buckets = bucketList(gran, start);
+    var index = Object.create(null);
+    buckets.forEach(function (b, i) { index[b.key] = i; });
+    var android = buckets.map(function () { return 0; });
+    var ios = buckets.map(function () { return 0; });
+    (d.series || []).forEach(function (row) {
+      var i = index[row.bucket];
+      if (i == null) return;
+      var v = metric === 'net' ? row.net : row.gross;
+      if (row.platform === 'ios') ios[i] += v; else android[i] += v;
+    });
+    var stacks = [];
+    if (moneyState.platform !== 'ios') stacks.push({ name: 'Android', color: ANDROID_COLOR, values: android });
+    if (moneyState.platform !== 'android') stacks.push({ name: 'iOS', color: IOS_COLOR, values: ios });
+    $('moneyChartTitle').textContent = (metric === 'net' ? 'Your earnings' : 'Customer paid') + ' \\u00b7 ' +
+      ({ day: 'per day', month: 'per month', year: 'per year' })[gran] + (cur ? ' (' + cur + ')' : '');
+    barChart($('moneyChart'), $('moneyTip'), buckets, stacks, function (v, axis) { return axis ? fmtMoneyShort(v, cur) : m(v); });
+    $('moneyTip').textContent = 'Hover a bar for details.';
+
+    var t = d.total || {};
+    var p = d.platforms || {};
+    var a = p.android || {}, i2 = p.ios || {};
+    var sum = (a.gross || 0) + (i2.gross || 0);
+    var aPct = sum > 0 ? Math.round((a.gross || 0) / sum * 100) : 0;
+    var subs = d.subscribers || {};
+    $('moneyTotals').innerHTML = [
+      statCard('Customer paid \\u00b7 period', m(t.gross), 'Tax included ' + m(t.tax) + ' (Google Play only)'),
+      statCard('Your earnings \\u00b7 period', (t.netEstimated ? '\\u2248 ' : '') + m(t.net), t.netEstimated ? 'App Store part is an estimate' : 'After store fees and tax'),
+      statCard('Payments', fmtInt(t.count), fmtInt(t.count - t.renewals) + ' new \\u00b7 ' + fmtInt(t.renewals) + ' renewals \\u00b7 ' + fmtInt(t.refunds) + ' refunded'),
+      statCard('Active subscribers', fmtInt((subs.android || 0) + (subs.ios || 0)), 'Android ' + fmtInt(subs.android) + ' \\u00b7 iOS ' + fmtInt(subs.ios) + ' \\u00b7 ' + fmtInt(subs.autoRenewing) + ' set to renew'),
+      statCard('Android vs iOS', sum > 0 ? aPct + '% / ' + (100 - aPct) + '%' : '\\u2013',
+        '<div class="split"><span style="width:' + aPct + '%;background:' + ANDROID_COLOR + '"></span><span style="width:' + (sum > 0 ? 100 - aPct : 0) + '%;background:' + IOS_COLOR + '"></span></div>' +
+        escapeHtml('Android ' + m(a.gross) + ' \\u00b7 iOS ' + m(i2.gross)), { subHtml: true })
+    ].join('');
+
+    var rows = (d.recent || []).map(function (r) {
+      var badges = '';
+      if (r.refundedAmount > 0) badges += '<span class="badge refund">Refunded</span> ';
+      if (r.isTest) badges += '<span class="badge test">Test</span> ';
+      if (!badges) badges = '<span class="muted">Paid</span>';
+      var user = r.userId
+        ? '<button type="button" class="link-btn" data-user="' + escapeHtml(r.userId) + '">' + escapeHtml(r.userName || 'View user') + '</button>'
+        : '<span class="muted">Unknown</span>';
+      return '<tr>' +
+        '<td>' + escapeHtml(fmtDate(r.purchasedAt)) + '</td>' +
+        '<td><span class="badge ' + (r.platform === 'ios' ? 'ios' : 'android') + '">' + escapeHtml(lookup(PLATFORM_LABELS, r.platform, r.platform)) + '</span></td>' +
+        '<td>' + (r.kind === 'renewal' ? 'Renewal' : 'New') + '</td>' +
+        '<td class="hide-sm">' + user + '</td>' +
+        '<td class="num">' + escapeHtml(fmtMoney(r.amount, r.currency)) + '</td>' +
+        '<td class="num">' + (r.net == null ? '\\u2013' : (r.netEstimated ? '\\u2248 ' : '') + escapeHtml(fmtMoney(r.net, r.currency))) + '</td>' +
+        '<td>' + badges + '</td>' +
+      '</tr>';
+    });
+    $('moneyRecent').innerHTML = rows.length ? rows.join('') : '<tr><td colspan="7" class="muted">No payments in this period.</td></tr>';
+  }
+
+  $('moneyRecent').addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('[data-user]') : null;
+    if (b) openUserDetail(b.getAttribute('data-user'));
+  });
+  $('moneyPlatform').addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('[data-v]') : null;
+    if (!b) return;
+    moneyState.platform = b.getAttribute('data-v');
+    setSeg('moneyPlatform', moneyState.platform);
+    loadMoney();
+  });
+  $('moneyGranularity').addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('[data-v]') : null;
+    if (!b) return;
+    moneyState.granularity = b.getAttribute('data-v');
+    setSeg('moneyGranularity', moneyState.granularity);
+    fillRangeSelect();
+    loadMoney();
+  });
+  $('moneyRange').addEventListener('change', function () {
+    moneyState.range[moneyState.granularity] = Number($('moneyRange').value);
+    loadMoney();
+  });
+  $('moneyCurrency').addEventListener('change', function () {
+    moneyState.currency = $('moneyCurrency').value;
+    loadMoney();
+  });
+  $('moneyMetric').addEventListener('change', function () {
+    moneyState.metric = $('moneyMetric').value;
+    loadMoney();
+  });
+  $('moneyTest').addEventListener('change', function () {
+    moneyState.includeTest = $('moneyTest').checked;
+    loadMoney();
+  });
+  $('moneyRefresh').addEventListener('click', loadMoney);
+  $('moneySync').addEventListener('click', async function () {
+    var btn = $('moneySync');
+    btn.disabled = true;
+    moneyState.syncing = true;
+    setLine('moneyStatus', 'Syncing with Google Play and the App Store\\u2026 this can take a minute.');
+    try {
+      var r = await api('/revenue/sync', { method: 'POST', body: '{}' });
+      var msg = 'Synced ' + fmtInt(r.subscriptions) + ' subscription(s), ' + fmtInt(r.payments) + ' payment(s).' +
+        (r.skipped ? ' ' + fmtInt(r.skipped) + ' ended too long ago for the store to return them.' : '') +
+        (r.failed ? ' ' + fmtInt(r.failed) + ' failed: ' + (r.errors || []).join(' ') : '');
+      setLine('moneyStatus', msg, r.failed ? 'err' : 'ok');
+    } catch (e) {
+      setLine('moneyStatus', e.message, 'err');
+    } finally {
+      moneyState.syncing = false;
+      btn.disabled = false;
+      loadMoney();
+    }
+  });
+  fillRangeSelect();
+
+  // ── User detail ───────────────────────────────────────────────────────────
+  var drawerState = { userId: null, seq: 0, user: null, returnFocus: null };
+
+  function closeDrawer() {
+    if ($('drawer').hidden) return;
+    $('drawer').hidden = true;
+    drawerState.userId = null;
+    drawerState.user = null;
+    if (!modal.opts) document.body.classList.remove('modal-open');
+    var back = drawerState.returnFocus;
+    drawerState.returnFocus = null;
+    if (back && typeof back.focus === 'function' && document.body.contains(back)) back.focus();
+  }
+
+  function kvHtml(pairs) {
+    return '<div class="kv">' + pairs.filter(function (p) { return p[1] !== '' && p[1] != null; }).map(function (p) {
+      return '<div><span>' + escapeHtml(p[0]) + '</span>' + (p[2] ? p[1] : escapeHtml(p[1])) + '</div>';
+    }).join('') + '</div>';
+  }
+
+  async function openUserDetail(id) {
+    if ($('drawer').hidden) drawerState.returnFocus = document.activeElement;
+    drawerState.userId = id;
+    var seq = ++drawerState.seq;
+    $('drawer').hidden = false;
+    document.body.classList.add('modal-open');
+    $('drawerTitle').textContent = 'User';
+    $('drawerBody').innerHTML = '';
+    setLine('drawerStatus', 'Loading…');
+    $('drawerDialog').focus();
+    try {
+      var d = await api('/users/' + encodeURIComponent(id));
+      if (seq !== drawerState.seq) return;
+      setLine('drawerStatus', '');
+      renderUserDetail(d);
+      if (isOwner()) loadUserActivity(id, seq);
+    } catch (e) {
+      if (seq !== drawerState.seq) return;
+      setLine('drawerStatus', e.message, 'err');
+    }
+  }
+
+  function renderUserDetail(d) {
+    var u = d.user || {};
+    var id = String(u.id || '');
+    drawerState.user = u;
+    state.byId[id] = u;
+    $('drawerTitle').textContent = u.name || 'Unnamed user';
+    var badges = (u.isPro ? '<span class="badge pro">PRO \\u00b7 ' + escapeHtml(proSource(u)) + '</span> ' : '<span class="badge free">FREE</span> ') +
+      (u.isBanned ? '<span class="badge banned">BANNED</span>' : '');
+    var head = '<div class="detail-head">' + avatarHtml(u.avatarUrl, true) + '<div class="who">' +
+      (u.username ? '<div class="muted">@' + escapeHtml(u.username) + '</div>' : '') +
+      (u.email ? '<div class="muted">' + escapeHtml(u.email) + '</div>' : '') +
+      '<div class="badges">' + badges + '</div></div></div>';
+
+    var account = kvHtml([
+      ['Joined', fmtDate(u.createdAt)],
+      ['Account type', u.isGuestUser ? 'Guest' : 'Registered'],
+      ['Share code', u.shareCode || ''],
+      ['Devices', (u.devicePlatforms || []).map(function (p) { return lookup(PLATFORM_LABELS, p, p); }).join(', ') || 'None registered'],
+      ['Terms accepted', u.termsAcceptedAt ? fmtDate(u.termsAcceptedAt) : 'Not yet'],
+      ['User ID', '<span class="mono">' + escapeHtml(id) + '</span>', true]
+    ].concat(u.isBanned ? [['Banned', fmtDate(u.bannedAt) + (u.banReason ? ' \\u00b7 ' + u.banReason : '')]] : []));
+
+    var hasStore = u.proPlatform === 'android' || u.proPlatform === 'ios';
+    var subscription = hasStore || u.adminPro ? kvHtml([
+      ['Store', hasStore ? (u.proPlatform === 'ios' ? 'App Store' : 'Google Play') : 'None (free grant)'],
+      ['Product', u.proProductId || ''],
+      ['Store status', u.proSubscriptionState ? humanize(String(u.proSubscriptionState).replace('SUBSCRIPTION_STATE_', '').toLowerCase()) : ''],
+      [u.proAutoRenewing ? 'Renews' : 'Ends', u.proExpiryAt ? fmtDate(u.proExpiryAt) : ''],
+      ['Auto-renew', hasStore ? (u.proAutoRenewing ? 'On' : 'Off') : ''],
+      ['Free Pro grant', u.adminPro ? 'Yes' : 'No'],
+      ['Last checked with store', u.proLastVerifiedAt ? fmtDate(u.proLastVerifiedAt) : '']
+    ]) : '<div class="muted">Never subscribed.</div>';
+
+    var s = d.stats || {};
+    var mini = '<div class="mini-stats">' + [
+      ['Votes sent', s.votesSent], ['Votes received', s.votesReceived], ['Matches', s.matches],
+      ['Reports against', s.reportsAgainst + (s.openReportsAgainst ? ' (' + s.openReportsAgainst + ' open)' : '')],
+      ['Reports filed', s.reportsFiled]
+    ].map(function (x) { return '<div><strong>' + escapeHtml(String(x[1] == null ? 0 : x[1])) + '</strong>' + escapeHtml(x[0]) + '</div>'; }).join('') + '</div>';
+
+    var payments = (d.payments || []).length
+      ? '<div class="table-scroll"><table><thead><tr><th>Date</th><th>Store</th><th>Type</th><th class="num">Paid</th><th>Status</th></tr></thead><tbody>' +
+        d.payments.map(function (p) {
+          return '<tr><td>' + escapeHtml(fmtDate(p.purchasedAt)) + '</td>' +
+            '<td><span class="badge ' + (p.platform === 'ios' ? 'ios' : 'android') + '">' + escapeHtml(lookup(PLATFORM_LABELS, p.platform, p.platform)) + '</span></td>' +
+            '<td>' + (p.kind === 'renewal' ? 'Renewal' : 'New') + '</td>' +
+            '<td class="num">' + escapeHtml(fmtMoney(p.amount, p.currency)) + '</td>' +
+            '<td>' + (p.refundedAmount > 0 ? '<span class="badge refund">Refunded</span> ' : '') + (p.isTest ? '<span class="badge test">Test</span>' : '') +
+              (!p.counted ? '<span class="badge inactive">Not charged</span>' : '') + '</td></tr>';
+        }).join('') + '</tbody></table></div>'
+      : '<div class="muted">No payments recorded.</div>';
+
+    var idAttr = escapeHtml(id);
+    var actions = '<div class="btn-group" style="margin-top:14px;">' +
+      (isOwner() ? (u.adminPro
+        ? '<button type="button" class="btn-danger btn-sm" data-act="unpro" data-id="' + idAttr + '">Remove free Pro</button>'
+        : '<button type="button" class="btn-primary btn-sm" data-act="pro" data-id="' + idAttr + '">Give free Pro</button>') : '') +
+      (u.isBanned
+        ? '<button type="button" class="btn-ghost btn-sm" data-act="unban" data-id="' + idAttr + '">Unban</button>'
+        : '<button type="button" class="btn-outline-danger btn-sm" data-act="ban" data-id="' + idAttr + '">Ban</button>') +
+      (isOwner() ? '<button type="button" class="btn-danger-solid btn-sm" data-act="delete" data-id="' + idAttr + '">Delete account</button>' : '') +
+      '</div>';
+
+    $('drawerBody').innerHTML = head + actions +
+      '<div class="detail-section"><h3>Account</h3>' + account + '</div>' +
+      '<div class="detail-section"><h3>Activity in the app</h3>' + mini + '</div>' +
+      '<div class="detail-section"><h3>Subscription</h3>' + subscription + '</div>' +
+      '<div class="detail-section"><h3>Payments</h3>' + payments + '</div>' +
+      (isOwner() ? '<div class="detail-section"><h3>Admin actions on this user</h3><div id="drawerActivity" class="muted">Loading…</div></div>' : '');
+  }
+
+  async function loadUserActivity(id, seq) {
+    try {
+      var d = await api('/audit?targetId=' + encodeURIComponent(id) + '&limit=10');
+      if (seq !== drawerState.seq || !$('drawerActivity')) return;
+      var entries = d.entries || [];
+      $('drawerActivity').innerHTML = entries.length
+        ? entries.map(function (a) {
+          return '<div style="margin-bottom:6px;"><strong>' + escapeHtml(a.summary || a.action) + '</strong><div class="muted">' +
+            escapeHtml(fmtDate(a.createdAt) + ' \\u00b7 ' + (a.adminName || a.adminEmail || 'Unknown admin')) + '</div></div>';
+        }).join('')
+        : 'No admin actions yet.';
+    } catch (e) {
+      if ($('drawerActivity')) $('drawerActivity').textContent = e.message;
+    }
+  }
+
+  function openDeleteUser(u) {
+    var who = whoLabel(u);
+    var hasActiveStore = u.storeProActive && (u.proPlatform === 'android' || u.proPlatform === 'ios');
+    openModal({
+      title: 'Delete the account of ' + who + '?',
+      body: [
+        'This permanently deletes the account, every vote they sent and received, their matches and their profile photo. It cannot be undone.',
+        'Reports they filed are kept without their personal details. Their payment records stay in Money.'
+      ],
+      warning: hasActiveStore ? 'They have an active ' + (u.proPlatform === 'ios' ? 'App Store' : 'Google Play') + ' subscription. Deleting the account does not cancel it: they must cancel it in the store, or you refund it from the store console.' : '',
+      fields: [
+        { name: 'reason', label: 'Reason (optional, saved in the activity log)' },
+        { name: 'confirm', label: 'Type DELETE to confirm', placeholder: 'DELETE' }
+      ],
+      confirmLabel: 'Delete account',
+      danger: true,
+      onConfirm: function (v) {
+        if (v.confirm !== 'DELETE') throw new Error('Type DELETE in capital letters to confirm.');
+        return api('/users/' + encodeURIComponent(u.id), { method: 'DELETE', body: JSON.stringify(v.reason ? { reason: v.reason } : {}) });
+      },
+      onSuccess: function () {
+        closeDrawer();
+        load().then(function () { setUserStatus('The account of ' + who + ' was deleted.', 'ok'); });
+        loadReports();
+      }
+    });
+  }
+
+  $('drawerClose').addEventListener('click', closeDrawer);
+  var drawerDown = false;
+  $('drawer').addEventListener('mousedown', function (e) { drawerDown = e.target === $('drawer'); });
+  $('drawer').addEventListener('click', function (e) {
+    if (drawerDown && e.target === $('drawer')) closeDrawer();
+    drawerDown = false;
+  });
+  $('drawerBody').addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('button[data-act]') : null;
+    if (!b || b.disabled) return;
+    var u = drawerState.user;
+    if (!u) return;
+    var act = b.getAttribute('data-act');
+    if (act === 'pro' || act === 'unpro') setPlan(u.id, act === 'pro');
+    else if (act === 'ban') openBan(u);
+    else if (act === 'unban') openUnban(u);
+    else if (act === 'delete') openDeleteUser(u);
+  });
+
+  // ── Admin accounts ────────────────────────────────────────────────────────
+  var adminState = { byId: Object.create(null) };
+
+  async function loadAdmins() {
+    if (!isOwner()) return;
+    try {
+      var d = await api('/admins');
+      var me = getSession().admin || {};
+      adminState.byId = Object.create(null);
+      $('adminRows').innerHTML = (d.admins || []).map(function (a) {
+        adminState.byId[a.id] = a;
+        var idAttr = escapeHtml(a.id);
+        var self = a.id === me.id;
+        var roleSel = '<select data-role-for="' + idAttr + '" aria-label="Role">' +
+          '<option value="owner"' + (a.role === 'owner' ? ' selected' : '') + '>Owner</option>' +
+          '<option value="moderator"' + (a.role !== 'owner' ? ' selected' : '') + '>Moderator</option></select>';
+        var actions = '<button type="button" class="btn-ghost btn-sm" data-admin-act="password" data-id="' + idAttr + '">Reset password</button>' +
+          (self ? '' : a.isActive
+            ? '<button type="button" class="btn-outline-danger btn-sm" data-admin-act="deactivate" data-id="' + idAttr + '">Deactivate</button>'
+            : '<button type="button" class="btn-ghost btn-sm" data-admin-act="activate" data-id="' + idAttr + '">Reactivate</button>');
+        return '<tr>' +
+          '<td><div class="who-name">' + escapeHtml(a.name) + (self ? ' <span class="muted">(you)</span>' : '') + '</div><div class="muted">' + escapeHtml(a.email) + '</div></td>' +
+          '<td>' + roleSel + '</td>' +
+          '<td>' + (a.isActive ? '<span class="muted">Active</span>' : '<span class="badge inactive">Deactivated</span>') + '</td>' +
+          '<td class="hide-sm">' + escapeHtml(a.lastLoginAt ? timeAgo(a.lastLoginAt) : 'Never') + '</td>' +
+          '<td><div class="btn-group">' + actions + '</div></td>' +
+        '</tr>';
+      }).join('') || '<tr><td colspan="5" class="muted">No admins.</td></tr>';
+    } catch (e) {
+      setLine('adminsStatus', e.message, 'err');
+    }
+  }
+
+  function updateAdmin(id, patch, okMsg) {
+    return api('/admins/' + encodeURIComponent(id), { method: 'PATCH', body: JSON.stringify(patch) })
+      .then(function () { setLine('adminsStatus', okMsg, 'ok'); loadAdmins(); });
+  }
+
+  $('adminRows').addEventListener('change', function (e) {
+    var sel = e.target;
+    if (!sel.hasAttribute || !sel.hasAttribute('data-role-for')) return;
+    var id = sel.getAttribute('data-role-for');
+    var a = adminState.byId[id];
+    updateAdmin(id, { role: sel.value }, (a ? a.email : 'Admin') + ' is now ' + (sel.value === 'owner' ? 'an owner.' : 'a moderator.'))
+      .catch(function (err) { setLine('adminsStatus', err.message, 'err'); loadAdmins(); });
+  });
+
+  $('adminRows').addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('button[data-admin-act]') : null;
+    if (!b) return;
+    var a = adminState.byId[b.getAttribute('data-id')];
+    if (!a) return;
+    var act = b.getAttribute('data-admin-act');
+    if (act === 'password') {
+      openModal({
+        title: 'Reset the password of ' + a.email + '?',
+        body: ['They are signed out everywhere and must use the new password. Share it with them privately.'],
+        fields: [{ name: 'password', label: 'New password (at least 10 characters)', type: 'password', autocomplete: 'new-password' }],
+        confirmLabel: 'Reset password',
+        danger: false,
+        onConfirm: function (v) {
+          if (!v.password || v.password.length < 10) throw new Error('Use a password of at least 10 characters.');
+          return updateAdmin(a.id, { password: v.password }, 'Password reset for ' + a.email + '.');
+        }
+      });
+    } else if (act === 'deactivate' || act === 'activate') {
+      var off = act === 'deactivate';
+      openModal({
+        title: (off ? 'Deactivate ' : 'Reactivate ') + a.email + '?',
+        body: [off ? 'They are signed out at once and can no longer sign in. Their past actions stay in the activity log.' : 'They can sign in again with their password.'],
+        confirmLabel: off ? 'Deactivate' : 'Reactivate',
+        danger: off,
+        onConfirm: function () {
+          return updateAdmin(a.id, { isActive: !off }, a.email + (off ? ' was deactivated.' : ' was reactivated.'));
+        }
+      });
+    }
+  });
+
+  $('addAdminBtn').addEventListener('click', function () {
+    openModal({
+      title: 'Add an admin',
+      body: ['They sign in at this page with this email and password. Share the password privately; they can change it after signing in.'],
+      fields: [
+        { name: 'name', label: 'Name' },
+        { name: 'email', label: 'Email', type: 'email' },
+        { name: 'role', label: 'Role', type: 'select', options: [['moderator', 'Moderator: reports and bans'], ['owner', 'Owner: everything, including money']] },
+        { name: 'password', label: 'Password (at least 10 characters)', type: 'password', autocomplete: 'new-password' }
+      ],
+      confirmLabel: 'Add admin',
+      danger: false,
+      onConfirm: function (v) {
+        if (!v.name || !v.email || !v.password) throw new Error('Fill in every field.');
+        if (v.password.length < 10) throw new Error('Use a password of at least 10 characters.');
+        return api('/admins', { method: 'POST', body: JSON.stringify(v) });
+      },
+      onSuccess: function (r) {
+        setLine('adminsStatus', 'Added ' + (r && r.admin ? r.admin.email : 'admin') + '.', 'ok');
+        loadAdmins();
+      }
+    });
+  });
+
+  // ── Activity log ──────────────────────────────────────────────────────────
+  var activityState = { page: 1, pages: 1, action: '', seq: 0 };
+  var ACTION_LABELS = {
+    'auth.login': 'Signed in',
+    'auth.login_failed': 'Failed sign-in',
+    'admin.bootstrap': 'Created first owner',
+    'admin.create': 'Added admin',
+    'admin.update': 'Changed admin',
+    'admin.password_change': 'Changed password',
+    'user.grant_pro': 'Gave free Pro',
+    'user.revoke_pro': 'Removed free Pro',
+    'user.ban': 'Banned user',
+    'user.unban': 'Unbanned user',
+    'user.delete': 'Deleted account',
+    'report.remove_content': 'Removed content',
+    'report.remove_and_ban': 'Removed & banned',
+    'report.dismiss': 'Dismissed report',
+    'config.update': 'Changed settings',
+    'revenue.sync': 'Synced payments'
+  };
+
+  async function loadActivity() {
+    if (!isOwner()) return;
+    var seq = ++activityState.seq;
+    setLine('activityStatus', 'Loading…');
+    try {
+      var d = await api('/audit?page=' + activityState.page + '&limit=50' + (activityState.action ? '&action=' + encodeURIComponent(activityState.action) : ''));
+      if (seq !== activityState.seq) return;
+      activityState.pages = Math.max(1, Number(d.pages) || 1);
+      $('activityPage').textContent = 'Page ' + activityState.page + ' / ' + activityState.pages;
+      $('activityPrev').disabled = activityState.page <= 1;
+      $('activityNext').disabled = activityState.page >= activityState.pages;
+      $('activitySummary').textContent = fmtInt(d.total) + ' action(s) recorded, newest first.';
+      $('activityRows').innerHTML = (d.entries || []).map(function (a) {
+        var label = lookup(ACTION_LABELS, a.action, humanize(a.action));
+        var failed = a.action === 'auth.login_failed';
+        var target = a.targetType === 'user' && a.targetId
+          ? ' <button type="button" class="link-btn" data-user="' + escapeHtml(a.targetId) + '">View user</button>' : '';
+        return '<tr>' +
+          '<td><div>' + escapeHtml(fmtDate(a.createdAt)) + '</div><div class="muted">' + escapeHtml(timeAgo(a.createdAt)) + '</div></td>' +
+          '<td><div class="who-name">' + escapeHtml(a.adminName || a.adminEmail || 'Unknown') + '</div>' + (a.adminName && a.adminEmail ? '<div class="muted">' + escapeHtml(a.adminEmail) + '</div>' : '') + '</td>' +
+          '<td><span class="badge ' + (failed ? 'refund' : 'kind') + '">' + escapeHtml(label) + '</span><div style="margin-top:4px;">' + escapeHtml(a.summary || '') + target + '</div></td>' +
+          '<td class="hide-sm mono muted">' + escapeHtml(a.ip || '') + '</td>' +
+        '</tr>';
+      }).join('') || '<tr><td colspan="4" class="muted">No actions recorded yet.</td></tr>';
+      setLine('activityStatus', '');
+    } catch (e) {
+      if (seq !== activityState.seq) return;
+      setLine('activityStatus', e.message, 'err');
+    }
+  }
+
+  $('activityRows').addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('[data-user]') : null;
+    if (b) openUserDetail(b.getAttribute('data-user'));
+  });
+  $('activityFilter').addEventListener('change', function () {
+    activityState.action = $('activityFilter').value;
+    activityState.page = 1;
+    loadActivity();
+  });
+  $('activityPrev').addEventListener('click', function () {
+    if (activityState.page > 1) { activityState.page--; loadActivity(); }
+  });
+  $('activityNext').addEventListener('click', function () {
+    if (activityState.page < activityState.pages) { activityState.page++; loadActivity(); }
+  });
+
+  // ── Start ─────────────────────────────────────────────────────────────────
+  (async function start() {
+    if (!signedIn()) { showAuth(''); return; }
+    try {
+      var me = await api('/auth/me');
+      var s = getSession();
+      s.admin = me.admin;
+      setSession(s);
+      showApp();
+    } catch (e) {
+      if (e.status === 401) signOut('Your session ended. Sign in again.');
+      else { showApp(); setStatus(e.message, 'err'); }
+    }
+  })();
 </script>
 </body>
 </html>`;

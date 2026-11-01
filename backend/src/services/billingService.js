@@ -10,6 +10,9 @@ const path = require('node:path');
 const {
   AppStoreServerAPIClient,
   Environment,
+  GetTransactionHistoryVersion,
+  Order,
+  ProductType,
   Status,
   SignedDataVerifier,
 } = require('@apple/app-store-server-library');
@@ -19,6 +22,7 @@ const BillingOwnership = require('../models/BillingOwnership');
 const ApiError = require('../utils/ApiError');
 const logger = require('../utils/logger');
 const env = require('../config/env');
+const revenueService = require('./revenueService');
 
 // Product IDs that grant Pro. Override with PRO_PRODUCT_IDS (comma separated).
 const PRO_PRODUCT_IDS = (process.env.PRO_PRODUCT_IDS || 'hamme_pro_weekly')
@@ -347,6 +351,7 @@ function appleSubscriptionSnapshot(statusResponse) {
     linkedPurchaseToken: null,
     acknowledgementPending: false,
     originalTransactionId: originalTransactionId.toString(),
+    environment: statusResponse.environment || null,
   };
 }
 
@@ -425,6 +430,254 @@ async function fetchAppleSubscription(receiptOrJws, trustedTransactionId = false
     status: lastError?.httpStatusCode,
   });
   throw new ApiError(402, 'Apple could not find an active purchase.');
+}
+
+// ── Revenue ledger ──────────────────────────────────────────────────────────
+// Every charge (first purchase and each renewal) is copied into StorePayment
+// for the admin Money screen. Recording never affects the user's entitlement:
+// failures are logged and retried by the next sync.
+
+// The App Store does not report your share per transaction. Proceeds are
+// estimated as price minus this fee (Small Business Program: 15%).
+const APPLE_FEE_RATE = Math.min(Math.max(Number(process.env.APPLE_STORE_FEE_RATE ?? 0.15), 0), 1);
+const COUNTED_PLAY_ORDER_STATES = new Set(['PROCESSED', 'PARTIALLY_REFUNDED', 'PENDING_REFUND', 'REFUNDED']);
+const MAX_ORDERS_PER_BATCH = 1000;
+const MAX_APPLE_HISTORY_PAGES = 50;
+let revenueSyncRunning = false;
+
+function moneyValue(money) {
+  if (!money) return null;
+  return Number(money.units || 0) + Number(money.nanos || 0) / 1e9;
+}
+
+function roundMoney(value) {
+  return value == null ? null : Math.round(value * 100) / 100;
+}
+
+/**
+ * Play renewal order ids are the first order id plus "..N"
+ * (GPA.1234-5678-9012-34567, GPA.1234-5678-9012-34567..0, ..1, ...). From the
+ * latest one we can list every order of the subscription.
+ */
+function expandPlayOrderIds(latestOrderId) {
+  const match = /^(.*)\.\.(\d+)$/.exec(latestOrderId || '');
+  if (!match) return latestOrderId ? [latestOrderId] : [];
+  const [, base, last] = match;
+  const ids = [base];
+  for (let i = 0; i <= Math.min(Number(last), 5000); i++) ids.push(`${base}..${i}`);
+  return ids;
+}
+
+function playPaymentFromOrder(order, { purchaseToken, userId, isTest }) {
+  const total = moneyValue(order.total);
+  const currency = order.total?.currencyCode;
+  if (!order.orderId || total == null || !currency) return null;
+  const state = order.state || null;
+  const refundedAmount = state === 'REFUNDED'
+    ? total
+    : (order.orderHistory?.partialRefundEvents || [])
+      .reduce((sum, event) => sum + (moneyValue(event.refundDetails?.total) || 0), 0);
+  // Google's figure already deducts tax, fees and partial refunds.
+  const developerRevenue = moneyValue(order.developerRevenueInBuyerCurrency);
+  return {
+    _id: `android:${order.orderId}`,
+    platform: 'android',
+    orderId: order.orderId,
+    subscriptionId: purchaseToken,
+    userId: userId || null,
+    productId: order.lineItems?.[0]?.productId || null,
+    kind: order.orderId.includes('..') ? 'renewal' : 'new',
+    purchasedAt: new Date(order.createTime || Date.now()),
+    currency,
+    amount: roundMoney(total),
+    tax: roundMoney(moneyValue(order.tax)),
+    refundedAmount: roundMoney(refundedAmount),
+    net: state === 'REFUNDED' ? 0 : roundMoney(developerRevenue),
+    netEstimated: false,
+    counted: COUNTED_PLAY_ORDER_STATES.has(state),
+    isTest: Boolean(isTest),
+    state,
+    country: order.buyerAddress?.buyerCountry || null,
+  };
+}
+
+async function fetchPlayOrders(publisher, packageName, orderIds) {
+  const orders = [];
+  for (let i = 0; i < orderIds.length; i += MAX_ORDERS_PER_BATCH) {
+    const chunk = orderIds.slice(i, i + MAX_ORDERS_PER_BATCH);
+    try {
+      const response = await publisher.orders.batchget(
+        { packageName, orderIds: chunk },
+        { timeout: GOOGLE_API_TIMEOUT_MS }
+      );
+      orders.push(...(response.data?.orders || []));
+    } catch (error) {
+      const status = Number(error?.code || error?.response?.status);
+      if ([401, 403].includes(status)) {
+        throw new ApiError(503, 'Google Play Orders API access denied. In Play Console > Users and permissions, give the service account "View financial data".');
+      }
+      // One unknown id can fail the whole batch: fetch them one by one.
+      for (const orderId of chunk) {
+        try {
+          const response = await publisher.orders.get(
+            { packageName, orderId },
+            { timeout: GOOGLE_API_TIMEOUT_MS }
+          );
+          if (response.data) orders.push(response.data);
+        } catch (_) {
+          // Order not available from the API (e.g. too old); skip it.
+        }
+      }
+    }
+  }
+  return orders;
+}
+
+async function collectPlayPayments(purchaseToken, snapshot, userId) {
+  const publisher = await getAndroidPublisher();
+  if (!publisher?.orders) return [];
+  const ids = new Set();
+  for (const item of snapshot.raw?.lineItems || []) {
+    for (const id of expandPlayOrderIds(item.latestSuccessfulOrderId)) ids.add(id);
+  }
+  for (const id of expandPlayOrderIds(snapshot.raw?.latestOrderId)) ids.add(id);
+  if (ids.size === 0) return [];
+
+  const orders = await fetchPlayOrders(publisher, ensurePackageName(), [...ids]);
+  const isTest = snapshot.raw?.testPurchase != null;
+  return orders
+    .map((order) => playPaymentFromOrder(order, { purchaseToken, userId, isTest }))
+    .filter(Boolean);
+}
+
+function applePaymentFromTransaction(transaction, userId) {
+  if (!transaction.transactionId || transaction.price == null || !transaction.currency) return null;
+  const amount = Number(transaction.price) / 1000;
+  const revoked = Boolean(transaction.revocationDate);
+  return {
+    _id: `ios:${transaction.transactionId}`,
+    platform: 'ios',
+    orderId: String(transaction.transactionId),
+    subscriptionId: transaction.originalTransactionId ? String(transaction.originalTransactionId) : null,
+    userId: userId || null,
+    productId: transaction.productId || null,
+    kind: transaction.transactionReason === 'RENEWAL' ? 'renewal' : 'new',
+    purchasedAt: new Date(transaction.purchaseDate || Date.now()),
+    currency: transaction.currency,
+    amount: roundMoney(amount),
+    tax: null,
+    refundedAmount: revoked ? roundMoney(amount) : 0,
+    net: revoked ? 0 : roundMoney(amount * (1 - APPLE_FEE_RATE)),
+    netEstimated: true,
+    counted: true,
+    isTest: transaction.environment !== Environment.PRODUCTION,
+    state: revoked ? 'REFUNDED' : 'PROCESSED',
+    country: transaction.storefront || null,
+  };
+}
+
+async function collectApplePayments(originalTransactionId, userId, preferredEnvironment) {
+  const environments = preferredEnvironment === Environment.SANDBOX
+    ? [Environment.SANDBOX, Environment.PRODUCTION]
+    : [Environment.PRODUCTION, Environment.SANDBOX];
+  let lastError;
+  for (const environment of environments) {
+    try {
+      const client = getAppleClient(environment);
+      const payments = [];
+      let revision = null;
+      for (let page = 0; page < MAX_APPLE_HISTORY_PAGES; page++) {
+        const response = await client.getTransactionHistory(
+          originalTransactionId,
+          revision,
+          { sort: Order.ASCENDING, productTypes: [ProductType.AUTO_RENEWABLE] },
+          GetTransactionHistoryVersion.V2
+        );
+        for (const jws of response.signedTransactions || []) {
+          const transaction = decodeAppleJwsPayload(jws);
+          if (!PRO_PRODUCT_IDS.includes(transaction.productId)) continue;
+          const payment = applePaymentFromTransaction(transaction, userId);
+          if (payment) payments.push(payment);
+        }
+        if (!response.hasMore) break;
+        revision = response.revision;
+      }
+      return payments;
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      lastError = error;
+    }
+  }
+  throw new ApiError(502, `App Store transaction history unavailable${lastError?.message ? ` (${lastError.message})` : ''}.`);
+}
+
+/** Copies a subscription's charges into the revenue ledger. Returns the count. */
+async function recordRevenue({ platform, subscriptionId, snapshot, userId }) {
+  // Development bypass snapshots carry no real store data.
+  if (!subscriptionId || !snapshot?.raw || Object.keys(snapshot.raw).length === 0) return 0;
+  const payments = platform === 'ios'
+    ? await collectApplePayments(subscriptionId, userId, snapshot.environment)
+    : await collectPlayPayments(subscriptionId, snapshot, userId);
+  return revenueService.upsertPayments(payments);
+}
+
+function recordRevenueInBackground(args) {
+  recordRevenue(args).catch((error) => {
+    logger.error('Recording subscription revenue failed', {
+      platform: args.platform,
+      userId: args.userId && String(args.userId),
+      message: error.message,
+    });
+  });
+}
+
+/**
+ * Re-reads every known store subscription and refreshes the ledger (admin
+ * "Sync now" button). Also back-fills purchases made before the ledger
+ * existed. Runs one subscription at a time to stay inside store API quotas.
+ */
+async function syncRevenueHistory() {
+  if (revenueSyncRunning) {
+    throw new ApiError(409, 'A revenue sync is already running. Try again in a minute.');
+  }
+  revenueSyncRunning = true;
+  const result = { subscriptions: 0, payments: 0, skipped: 0, failed: 0, errors: [] };
+  try {
+    const users = await User.find({ proPurchaseToken: { $type: 'string' }, proPlatform: { $in: ['android', 'ios'] } })
+      .select('+proPurchaseToken proPlatform')
+      .lean();
+    for (const user of users) {
+      result.subscriptions += 1;
+      try {
+        if (user.proPlatform === 'ios') {
+          result.payments += await revenueService.upsertPayments(
+            await collectApplePayments(user.proPurchaseToken, user._id)
+          );
+        } else {
+          const snapshot = await fetchSubscription(user.proPurchaseToken);
+          result.payments += await recordRevenue({
+            platform: 'android',
+            subscriptionId: user.proPurchaseToken,
+            snapshot,
+            userId: user._id,
+          });
+        }
+      } catch (error) {
+        // Google forgets subscriptions about 60 days after they end.
+        if (error instanceof ApiError && error.statusCode === 402) {
+          result.skipped += 1;
+          continue;
+        }
+        result.failed += 1;
+        if (result.errors.length < 5 && !result.errors.includes(error.message)) {
+          result.errors.push(error.message);
+        }
+      }
+    }
+    return result;
+  } finally {
+    revenueSyncRunning = false;
+  }
 }
 
 function hasLegacyAdminGrant(user) {
@@ -618,6 +871,7 @@ async function verifyPurchase(userId, payload) {
   const user = await User.findById(userId).select('+proPurchaseToken');
   if (!user) throw new ApiError(404, 'User not found.');
   const verifiedUser = await saveSubscriptionSnapshot(user, ownershipToken, snapshot, platform);
+  recordRevenueInBackground({ platform, subscriptionId: ownershipToken, snapshot, userId: user.id });
 
   if (snapshot.acknowledgementPending) {
     try {
@@ -701,6 +955,7 @@ async function restorePurchase(userId, payload) {
   } finally {
     await session.endSession();
   }
+  recordRevenueInBackground({ platform, subscriptionId: ownershipToken, snapshot, userId: restoredUser.id });
   if (snapshot.acknowledgementPending) {
     try {
       await acknowledgeSubscription(purchaseToken, snapshot.productId, payload.packageName);
@@ -742,12 +997,11 @@ async function syncUserSubscription(userId) {
     const snapshot = isIos
       ? await fetchAppleSubscription(user.proPurchaseToken, true)
       : await fetchSubscription(user.proPurchaseToken);
-    return saveSubscriptionSnapshot(
-      user,
-      isIos ? snapshot.originalTransactionId : user.proPurchaseToken,
-      snapshot,
-      isIos ? 'ios' : 'android'
-    );
+    const subscriptionId = isIos ? snapshot.originalTransactionId : user.proPurchaseToken;
+    const saved = await saveSubscriptionSnapshot(user, subscriptionId, snapshot, isIos ? 'ios' : 'android');
+    // Picks up renewals that happened while the app was closed.
+    recordRevenueInBackground({ platform: isIos ? 'ios' : 'android', subscriptionId, snapshot, userId: user.id });
+    return saved;
   } catch (error) {
     if (error instanceof ApiError && error.statusCode === 402) {
       return markStoreSubscriptionInactive(
@@ -906,6 +1160,12 @@ async function processRtdn(pubsubEnvelope) {
   }
 
   await saveSubscriptionSnapshot(user, purchaseToken, snapshot);
+  // Renewals and refunds arrive here, so record them before acknowledging.
+  try {
+    await recordRevenue({ platform: 'android', subscriptionId: purchaseToken, snapshot, userId: user.id });
+  } catch (error) {
+    logger.error('Recording subscription revenue failed', { userId: user.id, message: error.message });
+  }
   return {
     test: false,
     updated: true,
@@ -919,7 +1179,12 @@ module.exports = {
   PRO_PRODUCT_IDS,
   processRtdn,
   restorePurchase,
+  syncRevenueHistory,
   syncUserSubscription,
   verifyPurchase,
   verifyRtdnAuthorization,
+  // Exposed for tests.
+  expandPlayOrderIds,
+  playPaymentFromOrder,
+  applePaymentFromTransaction,
 };
