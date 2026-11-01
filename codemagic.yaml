@@ -47,6 +47,38 @@ workflows:
         auth: integration
         submit_to_testflight: false   # internal testers get every processed build; external beta review needs Test Information
 
+  ios-simulator-workflow:
+    name: iOS Simulator (Appetize)
+    max_build_duration: 30
+    instance_type: mac_mini_m2
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Create .env
+        script: |
+          cat <<EOF > .env
+          API_BASE_URL=https://api.hamme.app/api/v1
+          API_BASE_URL_PROD=https://api.hamme.app/api/v1
+          APP_SCHEME=hamme
+          SHARE_LINK_BASE=https://www.hamme.app/u
+          APP_HOST=www.hamme.app
+          EOF
+      - name: Get Flutter packages
+        script: flutter pub get
+      - name: Install pods
+        script: |
+          cd ios && (pod install --repo-update || pod update)
+      - name: Build for simulator
+        script: |
+          # Simulator builds are unsigned and debug-only; zip the .app for Appetize.io upload.
+          flutter build ios --simulator --debug
+          cd build/ios/iphonesimulator
+          zip -qr ../simulator-app.zip ./*.app
+    artifacts:
+      - build/ios/simulator-app.zip
+
   android-workflow:
     name: Android App Bundle
     max_build_duration: 60
