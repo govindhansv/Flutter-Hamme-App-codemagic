@@ -5,6 +5,8 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:in_app_purchase_android/in_app_purchase_android.dart';
+import 'package:in_app_purchase_storekit/in_app_purchase_storekit.dart';
+import 'package:in_app_purchase_storekit/store_kit_2_wrappers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/utils/app_exception.dart';
@@ -334,6 +336,10 @@ class BillingController extends Notifier<BillingState>
         return;
       }
     }
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      await _finishExpiredUnfinishedTransactions();
+      if (_disposed) return;
+    }
     final product = state.proProduct;
     if (product == null) {
       state = state.copyWith(
@@ -399,6 +405,26 @@ class BillingController extends Notifier<BillingState>
         purchasePending: false,
         error: _storeErrorMessage(error),
       );
+    }
+  }
+
+  /// StoreKit 2 rejects a new purchase while an older transaction for the same
+  /// product is unfinished, and we only finish transactions the backend
+  /// verifies. An expired subscription can never verify as active, so it would
+  /// block Subscribe forever (and Restore, which only sees current
+  /// entitlements, cannot find it). Finish those before purchasing.
+  Future<void> _finishExpiredUnfinishedTransactions() async {
+    if (!InAppPurchaseStoreKitPlatform.isStoreKit2Enabled) return;
+    try {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      for (final transaction in await SK2Transaction.unfinishedTransactions()) {
+        if (!ProProducts.ids.contains(transaction.productId)) continue;
+        final expiresAt = int.tryParse(transaction.expirationDate ?? '');
+        if (expiresAt == null || expiresAt > now) continue;
+        await SK2Transaction.finish(int.parse(transaction.id));
+      }
+    } catch (error) {
+      debugPrint('[Billing] finishing expired transactions failed: $error');
     }
   }
 
