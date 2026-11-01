@@ -3,15 +3,17 @@ workflows:
     name: iOS Build
     max_build_duration: 60
     instance_type: mac_mini_m2
+    integrations:
+      app_store_connect: Hamme ASC   # Team settings > Integrations > Developer Portal (API key name)
     environment:
       flutter: stable
       xcode: latest
       cocoapods: default
-      groups:
-        - app_store_credentials   # set up in Codemagic UI (App Store Connect API key)
+      vars:
+        APP_STORE_APPLE_ID: 6791659254
       ios_signing:
         distribution_type: app_store
-        bundle_identifier: com.hamme.app
+        bundle_identifier: com.akash.hammeapp
     scripts:
       - name: Create .env
         script: |
@@ -29,12 +31,21 @@ workflows:
           # Fall back to pod update when Podfile.lock pins pod versions that an
           # upgraded plugin no longer accepts (e.g. a Firebase major bump).
           cd ios && (pod install --repo-update || pod update)
+      - name: Set up code signing
+        script: xcode-project use-profiles
       - name: Flutter build ipa
         script: |
+          # TestFlight rejects reused build numbers, so continue from the latest upload.
+          LATEST=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" || echo 28)
           flutter build ipa --release \
+            --build-number=$((LATEST + 1)) \
             --export-options-plist=/Users/builder/export_options.plist
     artifacts:
       - build/ios/ipa/*.ipa
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
 
   android-workflow:
     name: Android App Bundle
