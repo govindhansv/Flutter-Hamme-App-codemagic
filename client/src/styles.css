@@ -356,6 +356,12 @@ body {
   list-style: disc;
 }
 
+.privacy-card ol {
+  margin: 0;
+  padding-left: 22px;
+  list-style: decimal;
+}
+
 .privacy-card li + li {
   margin-top: 4px;
 }
@@ -368,7 +374,8 @@ body {
 }
 
 .privacy-card p + p,
-.privacy-card ul + p {
+.privacy-card ul + p,
+.privacy-card ol + p {
   margin-top: 12px;
 }
 

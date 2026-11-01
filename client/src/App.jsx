@@ -19,6 +19,7 @@ const isPrivacyPolicyRoute = currentPath === '/privacy-policy';
 const isTermsOfServiceRoute = currentPath === '/terms-of-service' || currentPath === '/terms';
 const isSupportRoute = currentPath === '/support';
 const isCommunityGuidelinesRoute = currentPath === '/community-guidelines';
+const isDeleteAccountRoute = currentPath === '/delete-account';
 const voteBlockedMessage = "You can't vote for this profile.";
 const submitErrorMessage = 'Could not submit response. Please try again.';
 const rateLimitedMessage = 'Too many votes right now. Please try again in a minute.';
@@ -89,7 +90,8 @@ const profileRequest =
   !isPrivacyPolicyRoute &&
   !isTermsOfServiceRoute &&
   !isSupportRoute &&
-  !isCommunityGuidelinesRoute
+  !isCommunityGuidelinesRoute &&
+  !isDeleteAccountRoute
     ? fetch(`${apiBaseUrl}/public-profile/${encodeURIComponent(initialShareCode)}`, {
         // Don't leave visitors on "Loading profile..." forever if the API stalls.
         signal: typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(15000) : undefined,
@@ -147,6 +149,9 @@ function App() {
   }
   if (isCommunityGuidelinesRoute) {
     return <CommunityGuidelinesPage />;
+  }
+  if (isDeleteAccountRoute) {
+    return <DeleteAccountPage />;
   }
 
   return <ShareFlowApp />;
@@ -512,7 +517,10 @@ const legalPages = [
   { key: 'privacy', href: '/privacy-policy', label: 'Privacy Policy' },
   { key: 'guidelines', href: '/community-guidelines', label: 'Community Guidelines' },
   { key: 'support', href: '/support', label: 'Support Center' },
+  { key: 'delete-account', href: '/delete-account', label: 'Delete Account' },
 ];
+
+const deleteAccountMailto = `mailto:${legal.supportEmail}?subject=${encodeURIComponent('Delete my Hamme account')}`;
 
 function MailLink({ email }) {
   return (
@@ -815,7 +823,10 @@ function PrivacyPolicyPage() {
           <strong>Without the app installed:</strong> email <MailLink email={legal.supportEmail} /> from a device or
           address we can verify. We will confirm and act within 30 days.
         </p>
-        <p>You do not need to reinstall the app to request deletion.</p>
+        <p>
+          You do not need to reinstall the app to request deletion. Step-by-step instructions are on our{' '}
+          <a className="legal-link" href="/delete-account">Delete Account</a> page.
+        </p>
 
         <h2>8. Your Rights</h2>
         <p>
@@ -900,6 +911,82 @@ function PrivacyPolicyPage() {
   );
 }
 
+// Linked from the Google Play Data safety form, which requires a web page where
+// people can ask for their account to be deleted without reinstalling the app.
+function DeleteAccountPage() {
+  return (
+    <main className="privacy-shell">
+      <section className="privacy-card">
+        <div className="privacy-eyebrow">Hamme</div>
+        <h1>Delete Your Hamme Account</h1>
+        <p className="privacy-meta">Last updated: {legal.lastUpdated}</p>
+        <p>
+          You can delete your Hamme account and the data linked to it at any time. Hamme accounts have no password, so
+          there are two ways to do it, depending on whether you still have the app.
+        </p>
+
+        <h2>1. In the app (fastest)</h2>
+        <ol>
+          <li>Open Hamme on the phone you signed up with.</li>
+          <li>
+            Go to <strong>Settings</strong> and tap <strong>Delete Account</strong>.
+          </li>
+          <li>Confirm. You are signed out and your account is deleted straight away.</li>
+        </ol>
+
+        <h2>2. Without the app</h2>
+        <p>
+          If you uninstalled Hamme or no longer have the phone, you do not need to reinstall it. Email{' '}
+          <a className="legal-link" href={deleteAccountMailto}>{legal.supportEmail}</a> with the subject “Delete my
+          Hamme account” and include:
+        </p>
+        <ul>
+          <li>Your Hamme username and display name</li>
+          <li>Your Instagram or Snapchat handle, if you linked one</li>
+        </ul>
+        <p>
+          We use these details to find your account. If we need to confirm it is yours, we may ask you to message us
+          from the linked social handle. We confirm by email and delete the account within 30 days.
+        </p>
+        <div className="mt-4">
+          <a
+            href={deleteAccountMailto}
+            className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 font-extrabold text-black shadow-md hover:bg-white/95 transition active:scale-95"
+          >
+            Request deletion by email
+          </a>
+        </div>
+
+        <h2>3. What is deleted and what is kept</h2>
+        <LegalTable
+          columns={['Data', 'What happens']}
+          rows={[
+            ['Name, username, age, and profile photo', 'Deleted'],
+            ['Linked Instagram or Snapchat handle', 'Deleted'],
+            ['Votes, reactions, and matches', 'Deleted'],
+            ['Device ID and push notification token', 'Deleted'],
+            [
+              'Abuse, ban, and moderation records',
+              'Kept for 12 months after deletion, to stop banned users returning',
+            ],
+            ['Purchase records', 'Kept by Apple or Google under their own policies'],
+            ['Records we must keep by law', 'Kept as long as the law requires'],
+          ]}
+        />
+        <p>
+          Everything marked “Deleted” is deleted or irreversibly anonymised within 30 days. Deleting your account does
+          not cancel a Hamme Pro subscription; cancel it in your Google Play or App Store subscriptions.
+        </p>
+        <p>
+          For more detail, see our <a className="legal-link" href="/privacy-policy">Privacy Policy</a>.
+        </p>
+
+        <LegalFooter current="delete-account" />
+      </section>
+    </main>
+  );
+}
+
 function SupportPage() {
   const [openFaq, setOpenFaq] = useState(null);
 
@@ -922,7 +1009,7 @@ function SupportPage() {
     },
     {
       q: "Can I delete my account and data?",
-      a: "Absolutely. You can delete your account at any time directly from the settings menu inside the mobile app. This immediately purges all your personal information, links, and responses from our servers permanently."
+      a: "Yes. In the app, go to Settings and tap Delete Account. If you no longer have the app, email support@hamme.app with your username. See www.hamme.app/delete-account for the full steps and what is deleted."
     },
     {
       q: "I purchased Pro but it's not showing up. What should I do?",
