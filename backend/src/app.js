@@ -30,11 +30,22 @@ app.use(
     crossOriginResourcePolicy: { policy: 'cross-origin' },
   })
 );
+// Browsers also send Origin on same-origin POSTs, e.g. from the admin panel
+// page this API serves at /api/v1/admin. Those are never cross-origin.
+function isSameOrigin(req, origin) {
+  try {
+    return new URL(origin).host.toLowerCase() === String(req.get('host') || '').toLowerCase();
+  } catch (_) {
+    return false;
+  }
+}
+
 app.use(
-  cors({
-    origin: (origin, callback) => {
-      if (!origin) return callback(null, true);
-      if (env.clientOrigin === '*') return callback(null, true);
+  cors((req, callback) => callback(null, {
+    origin: (origin, done) => {
+      if (!origin) return done(null, true);
+      if (env.clientOrigin === '*') return done(null, true);
+      if (isSameOrigin(req, origin)) return done(null, true);
       const normalizedOrigin = normalizeOrigin(origin);
 
       const isExplicitlyAllowed =
@@ -53,16 +64,16 @@ app.use(
         isPrivateNetworkDevOrigin(normalizedOrigin);
 
       if (isExplicitlyAllowed || isLocalhostDevOrigin || isLanDevOrigin) {
-        return callback(null, true);
+        return done(null, true);
       }
 
-      return callback(new ApiError(403, `CORS blocked origin: ${origin}`));
+      return done(new ApiError(403, `CORS blocked origin: ${origin}`));
     },
     credentials: true,
     // Let browsers cache the preflight instead of sending an OPTIONS request
     // before every JSON POST from the web vote page.
     maxAge: 24 * 60 * 60,
-  })
+  }))
 );
 app.use(
   morgan(env.nodeEnv === 'production' ? 'combined' : 'dev', {
