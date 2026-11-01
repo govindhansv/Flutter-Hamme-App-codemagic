@@ -104,6 +104,7 @@ class _SocialMediaScreenState extends ConsumerState<SocialMediaScreen> {
                         ? null
                         : () => _createAccountAndOpenPro(
                           'user${DateTime.now().millisecondsSinceEpoch}',
+                          skipped: true,
                         ),
                 child: const Text(
                   TTexts.skipAction,
@@ -367,13 +368,22 @@ class _SocialMediaScreenState extends ConsumerState<SocialMediaScreen> {
     );
   }
 
-  Future<void> _createAccountAndOpenPro(String username) async {
+  Future<void> _createAccountAndOpenPro(
+    String username, {
+    bool skipped = false,
+  }) async {
     if (_isCreatingAccount) return;
     setState(() => _isCreatingAccount = true);
 
     try {
+      // A skipped handle is a generated account username, not a real
+      // Instagram/Snapchat handle, so it must not be saved as one.
       final platform =
-          _isInstagramSelected ? TTexts.socialInstagram : TTexts.socialSnapchat;
+          skipped
+              ? ''
+              : _isInstagramSelected
+              ? TTexts.socialInstagram
+              : TTexts.socialSnapchat;
       await ref
           .read(onboardingDraftProvider.notifier)
           .setSocial(platform: platform, username: username);

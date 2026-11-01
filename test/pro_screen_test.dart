@@ -140,8 +140,8 @@ void main() {
     expect(find.text('Unlimited Play'), findsOneWidget);
     expect(find.text('Unlimited Rewinds'), findsOneWidget);
     expect(find.text('Priority Profile'), findsOneWidget);
-    expect(find.text('Continue'), findsOneWidget);
-    expect(find.text('Price available at checkout'), findsOneWidget);
+    expect(find.text('Subscribe'), findsOneWidget);
+    expect(find.text('Hamme Pro Weekly · Loading price…'), findsOneWidget);
     expect(tester.getRect(find.text('Privacy')).bottom, lessThanOrEqualTo(852));
     expect(tester.getRect(find.text('Restore')).bottom, lessThanOrEqualTo(852));
     expect(tester.getRect(find.text('Terms')).bottom, lessThanOrEqualTo(852));
@@ -188,7 +188,7 @@ void main() {
     );
 
     expect(find.text('Unlock Unlimited'), findsOneWidget);
-    expect(find.text('Continue'), findsOneWidget);
+    expect(find.text('Subscribe'), findsOneWidget);
     final privacyBefore = tester.getRect(find.text('Privacy'));
     expect(privacyBefore.bottom, lessThanOrEqualTo(480));
     await tester.drag(

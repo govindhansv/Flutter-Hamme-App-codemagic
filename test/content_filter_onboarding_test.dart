@@ -217,7 +217,7 @@ void main() {
       expect(find.byType(ProScreen), findsOneWidget);
       expect(auth.calls, 1);
       expect(pending.isCompleted, isFalse);
-      await tester.tap(find.text('Continue'));
+      await tester.tap(find.text('Subscribe'));
       await tester.pump();
       expect(billing.purchases, 0);
       pending.complete();

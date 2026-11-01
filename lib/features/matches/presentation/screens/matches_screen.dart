@@ -132,7 +132,7 @@ class _MatchesScreenState extends ConsumerState<MatchesScreen> {
                   error:
                       (error, _) => Center(
                         child: Text(
-                          'Error: $error',
+                          "Couldn't load your matches. Please try again later.",
                           style: const TextStyle(fontFamily: TFonts.nunito),
                         ),
                       ),
@@ -156,7 +156,7 @@ class _MatchesScreenState extends ConsumerState<MatchesScreen> {
                         ),
                         const SizedBox(width: 4),
                         const Text(
-                          'Matches are vanished after 24hrs',
+                          'Matches vanish after 24 hours',
                           style: TextStyle(
                             fontFamily: TFonts.nunito,
                             fontSize: 12,

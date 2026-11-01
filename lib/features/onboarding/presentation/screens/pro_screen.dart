@@ -298,7 +298,7 @@ class _ProScreenState extends ConsumerState<ProScreen> {
             ? 'Restore purchase'
             : billing.error != null
             ? 'Try again'
-            : 'Continue';
+            : 'Subscribe';
     final Future<void> Function() onCta =
         isUpgrade ? _buyPro : _continueOnboardingWithPurchase;
     final String? errorText =
@@ -335,23 +335,26 @@ class _ProScreenState extends ConsumerState<ProScreen> {
                         filterQuality: FilterQuality.high,
                       ),
                     ),
+                    // 44pt hit target at full opacity: App Review expects
+                    // the free path out of a paywall to be easy to find.
                     Positioned(
-                      top: 72,
-                      right: 24,
+                      top: 64,
+                      right: 16,
                       child: GestureDetector(
                         key: const Key('pro-close'),
                         onTap: _dismiss,
                         behavior: HitTestBehavior.opaque,
-                        child: SizedBox(
-                          width: 28,
-                          height: 28,
-                          child: Opacity(
-                            opacity: 0.6,
+                        child: Semantics(
+                          button: true,
+                          label: 'Close',
+                          child: SizedBox(
+                            width: 44,
+                            height: 44,
                             child: Center(
                               child: SvgPicture.asset(
                                 TImages.proClose,
-                                width: 17,
-                                height: 17,
+                                width: 20,
+                                height: 20,
                               ),
                             ),
                           ),
@@ -379,7 +382,7 @@ class _ProScreenState extends ConsumerState<ProScreen> {
                       final featureGap = compact ? 12.0 : 38.0;
                       final lastFeatureGap = compact ? 12.0 : 36.0;
                       final ctaHeight = compact ? 56.0 : 62.0;
-                      final billingHeight = 22.0;
+                      final billingHeight = 56.0;
                       final fixedContentHeight =
                           titleHeight +
                           featureCardHeight +
@@ -586,20 +589,41 @@ class _ProScreenState extends ConsumerState<ProScreen> {
                                         ),
                                       ],
                                       SizedBox(height: gap(12)),
+                                      // Guideline 3.1.2(c): plan name, length
+                                      // and price must be clear, with the
+                                      // auto-renewal terms beside them.
                                       SizedBox(
-                                        height: 22,
+                                        height: 24,
                                         child: FittedBox(
                                           fit: BoxFit.scaleDown,
                                           child: Text(
                                             billing.proProduct != null
-                                                ? 'pro renews for ${billing.proProduct!.price}/wk'
-                                                : 'Price available at checkout',
+                                                ? 'Hamme Pro Weekly · ${billing.proProduct!.price}/week'
+                                                : 'Hamme Pro Weekly · Loading price…',
                                             style: const TextStyle(
                                               fontFamily: TFonts.nunito,
-                                              fontSize: 16,
-                                              height: 22 / 16,
-                                              fontWeight: FontWeight.w500,
-                                              color: Color(0xFF98999A),
+                                              fontSize: 18,
+                                              height: 24 / 18,
+                                              fontWeight: FontWeight.w800,
+                                              color: Colors.black,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      const SizedBox(
+                                        height: 28,
+                                        child: FittedBox(
+                                          fit: BoxFit.scaleDown,
+                                          child: Text(
+                                            'Auto-renews weekly until cancelled. Cancel anytime in\nSettings › Apple ID › Subscriptions at least 24h before renewal.',
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                              fontFamily: TFonts.nunito,
+                                              fontSize: 11,
+                                              height: 14 / 11,
+                                              fontWeight: FontWeight.w600,
+                                              color: Color(0xFF6E6E73),
                                             ),
                                           ),
                                         ),

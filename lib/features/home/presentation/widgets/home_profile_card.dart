@@ -39,6 +39,7 @@ class _HomeProfileCardState extends ConsumerState<HomeProfileCard> {
       imageQuality: 80,
       maxWidth: 1024,
       maxHeight: 1024,
+      requestFullMetadata: false,
     );
 
     if (pickedFile == null) return;

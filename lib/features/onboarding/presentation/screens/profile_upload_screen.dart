@@ -13,7 +13,6 @@ import 'package:hamme_app/utils/constants/image_strings.dart';
 import 'package:hamme_app/utils/constants/text_strings.dart';
 
 import '../../../../../core/widgets/gradient_button.dart';
-import '../../../../../core/widgets/onboarding_validation_dialog.dart';
 import '../widgets/dob_top_bar.dart';
 import '../widgets/profile_avatar_stack.dart';
 import 'package:hamme_app/utils/popups/app_snack_bar.dart';
@@ -47,6 +46,7 @@ class _ProfileUploadScreenState extends ConsumerState<ProfileUploadScreen> {
         imageQuality: 80,
         maxWidth: 1024,
         maxHeight: 1024,
+        requestFullMetadata: false,
       );
 
       if (pickedFile == null) return;
@@ -77,6 +77,8 @@ class _ProfileUploadScreenState extends ConsumerState<ProfileUploadScreen> {
         filename: fileName.isNotEmpty ? fileName : 'profile.jpg',
       );
       unawaited(ref.read(onboardingPhotoUploadProvider.notifier).start());
+    } on PlatformException {
+      _showMessage('Could not open your photos. Please try again.');
     } finally {
       _isPickingImage = false;
     }
@@ -169,14 +171,18 @@ class _ProfileUploadScreenState extends ConsumerState<ProfileUploadScreen> {
                   if ((profileImageUrl == null || profileImageUrl.isEmpty) &&
                       selectedImage == null) {
                     HapticFeedback.mediumImpact();
-                    final shouldPickImage = await showOnboardingValidationDialog(
-                      context,
-                      title: 'Add a profile photo',
-                      message:
-                          'Choose a clear photo of yourself before continuing.',
-                      actionLabel: 'Choose photo',
-                    );
-                    if (shouldPickImage && mounted) await _pickProfileImage();
+                    // App Review 5.1.1(iv): no custom message (or Cancel)
+                    // may stand between the user and the photo picker, so
+                    // open it directly and only explain after a cancel.
+                    await _pickProfileImage();
+                    if (context.mounted &&
+                        ref.read(onboardingProfileImageProvider) == null) {
+                      AppSnackBar.show(
+                        context,
+                        'Add a clear photo of yourself to continue.',
+                        type: AppSnackBarType.info,
+                      );
+                    }
                     return;
                   }
                   context.go('/onboarding/social_media');

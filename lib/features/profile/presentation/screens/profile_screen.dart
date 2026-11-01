@@ -63,6 +63,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         imageQuality: 80,
         maxWidth: 1024,
         maxHeight: 1024,
+        requestFullMetadata: false,
       );
       if (image == null || !mounted) return;
 
