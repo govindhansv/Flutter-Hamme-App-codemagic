@@ -1,8 +1,9 @@
 # Privacy Policy update: sharing to Snapchat and Instagram
 
-**Status:** Waiting for client confirmation
-**Page:** https://www.hamme.app/privacy-policy
-**Current version:** Last updated September 25, 2026
+**Status:** Published on November 2, 2026 because the Snap Kit review was in progress. Waiting for client
+confirmation; any edits will be applied as a follow-up update.
+**Current page:** https://www.hamme.app/privacy-policy (Last updated November 2, 2026)
+**Previous version:** https://www.hamme.app/privacy-policy/2026-09-25 (Last updated September 25, 2026)
 
 ## Why this change is needed
 

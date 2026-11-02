@@ -16,6 +16,8 @@ const pendingTtlMs = pendingTtlSeconds * 1000;
 const displayTtlSeconds = Math.min(30, pendingTtlSeconds);
 const currentPath = window.location.pathname.replace(/\/+$/, '') || '/';
 const isPrivacyPolicyRoute = currentPath === '/privacy-policy';
+// Superseded privacy policy, kept at a stable URL for reference.
+const isPreviousPrivacyPolicyRoute = currentPath === '/privacy-policy/2026-09-25';
 const isTermsOfServiceRoute = currentPath === '/terms-of-service' || currentPath === '/terms';
 const isSupportRoute = currentPath === '/support';
 const isCommunityGuidelinesRoute = currentPath === '/community-guidelines';
@@ -88,6 +90,7 @@ const initialShareCode = readShareCodeFromPath();
 const profileRequest =
   initialShareCode &&
   !isPrivacyPolicyRoute &&
+  !isPreviousPrivacyPolicyRoute &&
   !isTermsOfServiceRoute &&
   !isSupportRoute &&
   !isCommunityGuidelinesRoute &&
@@ -140,6 +143,9 @@ function App() {
   }
   if (isPrivacyPolicyRoute) {
     return <PrivacyPolicyPage />;
+  }
+  if (isPreviousPrivacyPolicyRoute) {
+    return <PrivacyPolicyPage previousVersion />;
   }
   if (isTermsOfServiceRoute) {
     return <TermsOfServicePage />;
@@ -476,6 +482,8 @@ function ShareFlowApp() {
 
 const legal = {
   lastUpdated: 'September 25, 2026',
+  privacyLastUpdated: 'November 2, 2026',
+  previousPrivacyLastUpdated: 'September 25, 2026',
   supportEmail: 'support@hamme.app',
   // Canonical wording, shown verbatim in the app's terms gate and in-app
   // guidelines too. Keep every copy identical.
@@ -610,13 +618,21 @@ function LegalTable({ columns, rows }) {
   );
 }
 
-function PrivacyPolicyPage() {
+function PrivacyPolicyPage({ previousVersion = false }) {
   return (
     <main className="privacy-shell">
       <section className="privacy-card">
         <div className="privacy-eyebrow">Hamme</div>
         <h1>Privacy Policy</h1>
-        <p className="privacy-meta">Last updated: {legal.lastUpdated}</p>
+        <p className="privacy-meta">
+          Last updated: {previousVersion ? legal.previousPrivacyLastUpdated : legal.privacyLastUpdated}
+        </p>
+        {previousVersion && (
+          <p>
+            <strong>This is a previous version of our Privacy Policy.</strong> The current version is at{' '}
+            <a className="legal-link" href="/privacy-policy">www.hamme.app/privacy-policy</a>.
+          </p>
+        )}
         <p>
           This Privacy Policy explains what information Hamme (“we”, “us”) collects when you use the Hamme mobile app,
           the Hamme response pages on the web, and related services (together, the “Service”), and what we do with it.
@@ -790,10 +806,32 @@ function PrivacyPolicyPage() {
         <p>
           Service providers may process data only on our instructions and may not use it for their own purposes.
         </p>
-        <p>
-          If you share your Hamme link on a social platform, that platform’s own privacy policy governs your post there.
-          We do not control it.
-        </p>
+        {previousVersion ? (
+          <p>
+            If you share your Hamme link on a social platform, that platform’s own privacy policy governs your post
+            there. We do not control it.
+          </p>
+        ) : (
+          <>
+            <h3>Sharing to Snapchat and Instagram</h3>
+            <p>
+              When you choose to share to Snapchat or Instagram, the app hands the image you created (and, where
+              supported, your Hamme link) to that app on your device, using Snap’s Creative Kit or Instagram’s sharing
+              feature. We only do this when you tap share. Along with the image, Snapchat receives our app’s Snap Kit
+              client ID and app name so it can show where the content came from. We do not send Snap any other
+              personal data, and we do not receive your Snapchat or Instagram account details, friends list, or any
+              other data from those apps.
+            </p>
+            <p>
+              Content you share to Snapchat is handled under the{' '}
+              <a className="legal-link" href="https://values.snap.com/privacy/privacy-policy">
+                Snap Privacy Policy
+              </a>
+              , which is incorporated into this policy by reference for that sharing. Once you post, that platform’s
+              own privacy policy governs your post there. We do not control it.
+            </p>
+          </>
+        )}
 
         <h2>6. How Long We Keep Information</h2>
         <LegalTable
