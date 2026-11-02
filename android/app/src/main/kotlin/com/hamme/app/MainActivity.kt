@@ -1,5 +1,6 @@
 package com.hamme.app
 
+import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -16,6 +17,8 @@ class MainActivity : FlutterActivity() {
         private const val CHANNEL = "hamme/share_story"
         private const val INSTAGRAM_PACKAGE = "com.instagram.android"
         private const val TAG = "HammeStoryShare"
+        private const val SNAP_CLIENT_ID_KEY = "com.hamme.app.SNAP_CLIENT_ID"
+        private const val SNAP_REQUEST_CODE = 9834
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -63,9 +66,18 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    // Snapchat has no public "add to story" intent (that requires the Snap Kit
-    // Creative Kit SDK). A targeted ACTION_SEND opens Snapchat's preview with the
-    // image loaded, where the user can post it to My Story.
+    private fun snapClientId(): String? {
+        return try {
+            packageManager.getApplicationInfo(packageName, PackageManager.GET_META_DATA)
+                .metaData?.getString(SNAP_CLIENT_ID_KEY)?.takeIf { it.isNotBlank() }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    // Snap Creative Kit (no-SDK "Lite" flow) opens the image full screen in
+    // Snapchat's Preview editor. Without a client ID, or on a Snapchat build
+    // that can't handle it, fall back to a plain targeted ACTION_SEND.
     private fun shareToSnapchat(imagePath: String, attributionUrl: String?, result: MethodChannel.Result) {
         val packageName = "com.snapchat.android"
         try {
@@ -77,6 +89,35 @@ class MainActivity : FlutterActivity() {
 
             val authority = "${applicationContext.packageName}.fileprovider"
             val contentUri: Uri = FileProvider.getUriForFile(applicationContext, authority, imageFile)
+
+            val clientId = snapClientId()
+            if (clientId != null) {
+                val creativeKitIntent = Intent(Intent.ACTION_SEND).apply {
+                    setPackage(packageName)
+                    setDataAndType(Uri.parse("snapchat://creativekit/preview"), "image/*")
+                    putExtra("CLIENT_ID", clientId)
+                    putExtra(Intent.EXTRA_STREAM, contentUri)
+                    putExtra(
+                        "RESULT_INTENT",
+                        PendingIntent.getActivity(
+                            this@MainActivity,
+                            SNAP_REQUEST_CODE,
+                            Intent(),
+                            PendingIntent.FLAG_IMMUTABLE
+                        )
+                    )
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION
+                }
+                if (creativeKitIntent.resolveActivity(packageManager) != null) {
+                    grantUriPermission(packageName, contentUri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    startActivity(creativeKitIntent)
+                    result.success("SUCCESS")
+                    return
+                }
+                Log.w(TAG, "Snapchat Creative Kit intent not resolved; using ACTION_SEND")
+            }
 
             val intent = Intent(Intent.ACTION_SEND).apply {
                 type = "image/png"

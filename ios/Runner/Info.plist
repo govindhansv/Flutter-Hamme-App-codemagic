@@ -49,6 +49,8 @@
 	<true/>
 	<key>MetaAppID</key>
 	<string>1635269851545313</string>
+	<key>SnapClientID</key>
+	<string>d523c481-e244-48ff-9708-c90b238a3070</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Hamme uses your camera only if you choose to take a new profile photo.</string>
 	<key>NSMicrophoneUsageDescription</key>

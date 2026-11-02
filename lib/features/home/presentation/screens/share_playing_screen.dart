@@ -58,20 +58,19 @@ class SharePlayingScreen extends ConsumerStatefulWidget {
 
       if (platform == 'snapchat') {
         try {
-          if (Platform.isAndroid) {
-            final isInstalled =
-                await _storyChannel.invokeMethod<bool>('isSnapchatInstalled') ??
-                false;
-            if (isInstalled) {
-              final launchResult = await _storyChannel.invokeMethod<String>(
-                'shareToSnapchatStory',
-                {'imagePath': tempPath, 'attributionUrl': shareLink},
-              );
-              if (launchResult == 'SUCCESS') return;
-            }
+          final isInstalled =
+              await _storyChannel.invokeMethod<bool>('isSnapchatInstalled') ??
+              false;
+          if (isInstalled) {
+            // Snap Creative Kit opens the image in Snapchat's Preview editor.
+            final launchResult = await _storyChannel.invokeMethod<String>(
+              'shareToSnapchatStory',
+              {'imagePath': tempPath, 'attributionUrl': shareLink},
+            );
+            if (launchResult == 'SUCCESS') return;
           }
-          // iOS has no Snapchat story API without Snap Kit, so use the share
-          // sheet. Share the image alone: bundling text makes Snapchat's share
+          // Snapchat missing or Creative Kit unavailable: use the share sheet.
+          // On iOS share the image alone: bundling text makes Snapchat's share
           // extension treat it as a link. The link is already on the clipboard.
           if (!context.mounted) return;
           await SharePlus.instance.share(
