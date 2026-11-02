@@ -64,11 +64,6 @@
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@mipmap/ic_launcher" />
-        <!-- Snap Kit Creative Kit client ID (Staging; demo users only until the
-             Snap Kit app is approved, then swap in the Production client ID). -->
-        <meta-data
-            android:name="com.hamme.app.SNAP_CLIENT_ID"
-            android:value="d523c481-e244-48ff-9708-c90b238a3070" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
