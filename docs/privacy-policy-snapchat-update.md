@@ -13,9 +13,12 @@ uses Creative Kit to have a public privacy policy that:
 - explains what data the app collects, uses, shares and keeps (ours already does this), and
 - says that the app integrates with Snap Kit and may share content to Snapchat (ours does not say this yet).
 
+The Snap Developer Terms (section 4b) also require the policy to **incorporate by reference and link to the Snap
+Privacy Policy**, and to describe what the app shares with Snap. Ours does not do this yet.
+
 Our policy already covers everything else Snap checks. It is publicly hosted, linked from inside the app
-(Settings → Privacy Policy), and written for Hamme rather than copied from Snap. The only gap is the Snapchat sharing
-mention below.
+(Settings → Privacy Policy), and written for Hamme rather than copied from Snap. The only gaps are the Snapchat
+sharing mention and the link to Snap's Privacy Policy, both covered below.
 
 ## Proposed change
 
@@ -27,9 +30,13 @@ there. We do not control it."
 
 > **Sharing to Snapchat and Instagram.** When you choose to share to Snapchat or Instagram, the app hands the image
 > you created (and, where supported, your Hamme link) to that app on your device, using Snap's Creative Kit or
-> Instagram's sharing feature. We only do this when you tap share. We do not receive your Snapchat or Instagram
-> account details, friends list, or any other data from those apps. Once you post, that platform's own privacy
-> policy governs your post there. We do not control it.
+> Instagram's sharing feature. We only do this when you tap share. Along with the image, Snapchat receives our app's
+> Snap Kit client ID and app name so it can show where the content came from. We do not send Snap any other personal
+> data, and we do not receive your Snapchat or Instagram account details, friends list, or any other data from those
+> apps. Content you share to Snapchat is handled under the
+> [Snap Privacy Policy](https://values.snap.com/privacy/privacy-policy), which is incorporated into this policy by
+> reference for that sharing. Once you post, that platform's own privacy policy governs your post there. We do not
+> control it.
 
 ### 2. Update the date
 
