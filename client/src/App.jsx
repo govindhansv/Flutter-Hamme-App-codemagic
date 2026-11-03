@@ -1634,6 +1634,15 @@ function QuestionScreen({ onAnswer, profileImage, submittingType, submitError, v
         </div>
 
       </div>
+      {/* App Review 1.2: anonymous voters must agree to the terms before posting. */}
+      <p className="mt-1 max-w-[320px] text-[11px] font-medium leading-[14px] text-white/75">
+        By voting, you agree to our{' '}
+        <a href="/terms-of-service" className="font-bold text-white underline underline-offset-2">Terms</a> and{' '}
+        <a href="/community-guidelines" className="font-bold text-white underline underline-offset-2">
+          Community Guidelines
+        </a>
+        . We have zero tolerance for objectionable content or abusive users.
+      </p>
     </>
   );
 }
