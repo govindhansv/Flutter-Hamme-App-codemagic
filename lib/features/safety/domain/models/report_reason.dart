@@ -9,7 +9,7 @@ enum ReportReason {
   violence('violence', 'Violence or threats'),
   selfHarm('self_harm', 'Self-harm or suicide'),
   impersonation('impersonation', 'Fake account or impersonation'),
-  underage('underage', 'User may be under 13'),
+  underage('underage', 'User may be underage'),
   spam('spam', 'Spam or scam'),
   other('other', 'Something else');
 

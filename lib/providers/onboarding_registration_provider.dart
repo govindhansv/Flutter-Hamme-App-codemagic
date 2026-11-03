@@ -52,7 +52,7 @@ class OnboardingRegistration extends Notifier<AsyncValue<bool>> {
       await ref
           .read(authControllerProvider.notifier)
           .guestRegister(
-            age: age.clamp(13, 100),
+            age: age.clamp(kMinimumAge, 100),
             displayName: (draft.name ?? 'Guest').trim(),
             username: draft.username!,
             instagramId:

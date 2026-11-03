@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:hamme_app/core/constants/app_constants.dart';
 import 'package:hamme_app/providers/onboarding_providers.dart';
 import 'package:hamme_app/routes/route_paths.dart';
 import 'package:hamme_app/utils/constants/colors.dart';
@@ -22,7 +23,7 @@ class DobScreen extends ConsumerStatefulWidget {
 class _DobScreenState extends ConsumerState<DobScreen> {
   int _selectedAge = 19;
 
-  static const int _minAge = 13;
+  int get _minAge => kMinimumAge;
   static const int _maxAge = 100;
   static const double _progress = 65 / 170;
 

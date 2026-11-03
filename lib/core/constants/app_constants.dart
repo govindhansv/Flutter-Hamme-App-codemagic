@@ -7,6 +7,10 @@ import 'dart:io' show Platform;
 /// user with an older (or no) accepted version is asked to agree again.
 const int kCurrentTermsVersion = 1;
 
+/// Youngest age onboarding accepts. The App Store listing is rated 18+
+/// (App Review 1.2 for anonymous content); Google Play is rated 13+.
+int get kMinimumAge => defaultTargetPlatform == TargetPlatform.iOS ? 18 : 13;
+
 /// In-app contact for support and safety reports.
 const String kSupportEmail = 'support@hamme.app';
 

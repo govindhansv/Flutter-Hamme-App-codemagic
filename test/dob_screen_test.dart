@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -66,6 +67,27 @@ void main() {
       isTrue,
     );
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('iOS picker starts at 18, matching the App Store rating', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    await pumpDobScreen(tester, size: const Size(393, 852));
+
+    expect(find.text('18'), findsOneWidget);
+    expect(find.text('17'), findsNothing);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('Android picker still allows 13 and up', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    await pumpDobScreen(tester, size: const Size(393, 852));
+
+    expect(find.text('17'), findsOneWidget);
+    debugDefaultTargetPlatformOverride = null;
   });
 
   testWidgets('does not overflow on a compact phone', (tester) async {
